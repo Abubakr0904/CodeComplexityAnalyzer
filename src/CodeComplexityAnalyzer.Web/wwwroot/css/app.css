@@ -318,3 +318,15 @@ h1:focus {
 .cca-highlighted-line {
     background-color: rgba(59, 130, 246, 0.18);
 }
+
+/* ── Auto-analyze toggle ─────────────────────────────────────────────────── */
+.auto-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: 0.75rem;
+    font-size: 0.9em;
+    color: #4b5563;
+    user-select: none;
+    cursor: pointer;
+}
