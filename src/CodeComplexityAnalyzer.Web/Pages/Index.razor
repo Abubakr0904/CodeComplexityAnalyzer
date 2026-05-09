@@ -62,7 +62,16 @@
 
 <h2>Paste C# source</h2>
 
-<textarea rows="20" cols="100" @bind="_sourceCode" placeholder="Paste C# source here..." />
+<div class="drop-zone @(_isDragging ? "dragging" : "")"
+     @ondragenter="OnDragEnter"
+     @ondragover="OnDragOver"
+     @ondragover:preventDefault="true"
+     @ondragleave="OnDragLeave"
+     @ondrop="OnDrop"
+     @ondrop:preventDefault="true">
+    <textarea rows="20" cols="100" @bind="_sourceCode" placeholder="Paste C# source here, or drop .cs files onto this box..." />
+    <div class="drop-hint">Drop .cs files here</div>
+</div>
 
 <div>
     <button @onclick="Analyze" disabled="@_isAnalyzing">Analyze</button>
@@ -225,6 +234,37 @@
 
     // ── Paste mode ────────────────────────────────────────────────────────────
     private string _sourceCode = string.Empty;
+    private bool _isDragging = false;
+
+    private void OnDragEnter(DragEventArgs e) => _isDragging = true;
+    private void OnDragOver(DragEventArgs e) => _isDragging = true;
+    private void OnDragLeave(DragEventArgs e) => _isDragging = false;
+
+    private async Task OnDrop(DragEventArgs e)
+    {
+        _isDragging = false;
+        var files = await JS.InvokeAsync<FileDescriptor[]>("ccaConsumeDroppedFiles");
+        await IngestFiles(files);
+    }
+
+    private async Task IngestFiles(FileDescriptor[] files)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var file in files)
+        {
+            if (!file.Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
+            sb.AppendLine($"// ─── {file.Name} ───");
+            sb.AppendLine(file.Content);
+            sb.AppendLine();
+        }
+        if (sb.Length > 0)
+        {
+            _sourceCode = sb.ToString().TrimEnd();
+            StateHasChanged();
+        }
+    }
+
+    private sealed record FileDescriptor(string Name, string Content);
     private int _maxCc = 10;
     private int _maxLines = 60;
     private int _maxParams = 5;

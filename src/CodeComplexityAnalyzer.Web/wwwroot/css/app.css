@@ -252,3 +252,38 @@ h1:focus {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ── Drag-and-drop zone ──────────────────────────────────────────────────── */
+.drop-zone {
+    position: relative;
+    display: inline-block;
+    border: 2px dashed transparent;
+    border-radius: 6px;
+    transition: border-color 0.15s;
+}
+
+.drop-zone.dragging {
+    border-color: #3b82f6;
+    background-color: #eff6ff;
+}
+
+.drop-zone.dragging textarea {
+    pointer-events: none;
+}
+
+.drop-zone .drop-hint {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: #1d4ed8;
+    background-color: rgba(239, 246, 255, 0.85);
+    pointer-events: none;
+    border-radius: 6px;
+}
+
+.drop-zone.dragging .drop-hint {
+    display: flex;
+}

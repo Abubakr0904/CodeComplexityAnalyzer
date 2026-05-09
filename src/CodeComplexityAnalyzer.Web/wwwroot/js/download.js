@@ -22,3 +22,30 @@ window.ccaStorage = {
         localStorage.removeItem(key);
     }
 };
+
+(() => {
+    let pendingFiles = [];
+
+    document.addEventListener('drop', async (e) => {
+        if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer.files);
+        const descriptors = await Promise.all(files.map(async (f) => ({
+            name: f.name,
+            content: await f.text()
+        })));
+        pendingFiles = descriptors;
+    }, true);
+
+    document.addEventListener('dragover', (e) => {
+        if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+        }
+    }, true);
+
+    window.ccaConsumeDroppedFiles = () => {
+        const out = pendingFiles;
+        pendingFiles = [];
+        return out;
+    };
+})();
