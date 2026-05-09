@@ -108,6 +108,7 @@ else
     private string _repoStatus = string.Empty;
     private List<Finding>? _repoFindings;
     private bool _isAnalyzingRepo;
+    private int _failedDownloads;
 
     // DTOs for GitHub API responses
     private sealed record GitHubRepo(
@@ -134,6 +135,7 @@ else
     {
         _repoFindings = null;
         _repoStatus = string.Empty;
+        _failedDownloads = 0;
         _isAnalyzingRepo = true;
         StateHasChanged();
 
@@ -202,16 +204,23 @@ else
 
                 var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{defaultBranch}/{path}";
                 var content = await FetchTextAsync(rawUrl);
-                if (content is null) continue; // skip files that fail to download
+                if (content is null)
+                {
+                    _failedDownloads++;
+                    continue;
+                }
 
                 var metrics = analyzer.AnalyzeSource(content, path);
                 allFindings.AddRange(metrics.SelectMany(m => FindingFactory.Create(m, thresholds)));
             }
 
             _repoFindings = allFindings;
+            var failSuffix = _failedDownloads > 0
+                ? $" ({_failedDownloads} file(s) could not be downloaded)"
+                : string.Empty;
             _repoStatus = allFindings.Count == 0
-                ? $"Analyzed {total} files — no findings (all within thresholds)."
-                : $"Analyzed {total} files — {allFindings.Count} finding(s).";
+                ? $"Analyzed {total} files — no findings (all within thresholds).{failSuffix}"
+                : $"Analyzed {total} files — {allFindings.Count} finding(s).{failSuffix}";
         }
         finally
         {
@@ -285,14 +294,19 @@ else
         {
             response = await Http.SendAsync(request);
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[cca] Download failed for {url}: {ex.Message}");
             return null;
         }
 
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadAsStringAsync()
-            : null;
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"[cca] Download failed for {url}: HTTP {(int)response.StatusCode}");
+            return null;
+        }
+
+        return await response.Content.ReadAsStringAsync();
     }
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string url)
