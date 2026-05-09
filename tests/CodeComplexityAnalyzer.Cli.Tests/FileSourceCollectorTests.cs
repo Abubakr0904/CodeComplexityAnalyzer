@@ -1,3 +1,4 @@
+#nullable enable
 using CodeComplexityAnalyzer.Cli;
 using CodeComplexityAnalyzer.Core.Models;
 
