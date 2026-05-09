@@ -24,17 +24,16 @@ window.ccaStorage = {
 };
 
 (() => {
-    let pendingFiles = [];
+    let pendingPromise = null;
 
-    document.addEventListener('drop', async (e) => {
+    document.addEventListener('drop', (e) => {
         if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
         e.preventDefault();
         const files = Array.from(e.dataTransfer.files);
-        const descriptors = await Promise.all(files.map(async (f) => ({
+        pendingPromise = Promise.all(files.map(async (f) => ({
             name: f.name,
             content: await f.text()
         })));
-        pendingFiles = descriptors;
     }, true);
 
     document.addEventListener('dragover', (e) => {
@@ -43,9 +42,10 @@ window.ccaStorage = {
         }
     }, true);
 
-    window.ccaConsumeDroppedFiles = () => {
-        const out = pendingFiles;
-        pendingFiles = [];
+    window.ccaConsumeDroppedFiles = async () => {
+        if (!pendingPromise) return [];
+        const out = await pendingPromise;
+        pendingPromise = null;
         return out;
     };
 })();
