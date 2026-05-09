@@ -4,35 +4,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace CodeComplexityAnalyzer.Core.Analysis;
 
-public sealed class SyntaxAnalyzer
+public sealed class SyntaxAnalyzer : IAnalyzer
 {
-    public AnalysisReport Analyze(AnalysisOptions options)
+    public IReadOnlyList<MethodMetrics> AnalyzeSource(string sourceCode, string filePath)
     {
-        var files = EnumerateCsharpFiles(options).ToArray();
-        var methods = new List<MethodMetrics>();
-
-        foreach (var file in files)
-        {
-            methods.AddRange(AnalyzeFile(file));
-        }
-
-        var hotspots = methods
-            .Where(m => IsHotspot(m, options.Thresholds))
-            .OrderByDescending(m => m.CyclomaticComplexity)
-            .ToArray();
-
-        return new AnalysisReport(
-            RootPath: options.RootPath,
-            FilesAnalyzed: files.Length,
-            MethodsAnalyzed: methods.Count,
-            Methods: methods,
-            Hotspots: hotspots);
-    }
-
-    private static IEnumerable<MethodMetrics> AnalyzeFile(string filePath)
-    {
-        var source = File.ReadAllText(filePath);
-        var tree = CSharpSyntaxTree.ParseText(source, path: filePath);
+        var tree = CSharpSyntaxTree.ParseText(sourceCode, path: filePath);
         var root = tree.GetRoot();
 
         return root
@@ -42,31 +18,30 @@ public sealed class SyntaxAnalyzer
             .ToArray();
     }
 
-    private static IEnumerable<string> EnumerateCsharpFiles(AnalysisOptions options)
+    public AnalysisReport AnalyzeSources(
+        IEnumerable<SourceFile> sources,
+        string rootPath,
+        Thresholds thresholds)
     {
-        if (File.Exists(options.RootPath))
+        var sourceList = sources.ToArray();
+        var methods = new List<MethodMetrics>();
+
+        foreach (var source in sourceList)
         {
-            yield return options.RootPath;
-            yield break;
+            methods.AddRange(AnalyzeSource(source.SourceCode, source.FilePath));
         }
 
-        var excludeSet = new HashSet<string>(options.ExcludeDirectories, StringComparer.OrdinalIgnoreCase);
+        var hotspots = methods
+            .Where(m => IsHotspot(m, thresholds))
+            .OrderByDescending(m => m.CyclomaticComplexity)
+            .ToArray();
 
-        foreach (var path in Directory.EnumerateFiles(options.RootPath, "*.cs", SearchOption.AllDirectories))
-        {
-            if (IsExcluded(path, options.RootPath, excludeSet))
-            {
-                continue;
-            }
-            yield return path;
-        }
-    }
-
-    private static bool IsExcluded(string filePath, string rootPath, HashSet<string> excludes)
-    {
-        var relative = Path.GetRelativePath(rootPath, filePath);
-        var segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return segments.Any(excludes.Contains);
+        return new AnalysisReport(
+            RootPath: rootPath,
+            FilesAnalyzed: sourceList.Length,
+            MethodsAnalyzed: methods.Count,
+            Methods: methods,
+            Hotspots: hotspots);
     }
 
     private static bool IsHotspot(MethodMetrics m, Thresholds t) =>
