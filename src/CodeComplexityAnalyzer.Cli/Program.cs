@@ -56,7 +56,7 @@ rootCommand.SetHandler(
 
         IReporter reporter = format.ToLowerInvariant() switch
         {
-            "json" => new JsonReporter(),
+            "json" => new JsonReporter(options.Thresholds),
             "console" => new ConsoleReporter(),
             _ => throw new ArgumentException($"Unknown format: {format}"),
         };
