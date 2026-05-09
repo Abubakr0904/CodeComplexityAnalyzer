@@ -8,6 +8,12 @@ public class JsonReporterTests
 {
     private static readonly Thresholds DefaultThresholds = new(10, 60, 5);
 
+    private static MethodMetrics MakeMethod(int cc = 1, int lines = 1, int parameters = 0, int mi = 100,
+        string name = "M", string type = "C", string file = "f.cs", int line = 1) =>
+        new(MethodName: name, ContainingType: type, FilePath: file, LineNumber: line,
+            CyclomaticComplexity: cc, LineCount: lines, ParameterCount: parameters,
+            MaintainabilityIndex: mi);
+
     private static string Render(AnalysisReport report, Thresholds thresholds)
     {
         using var sw = new StringWriter();
@@ -50,7 +56,8 @@ public class JsonReporterTests
             LineNumber: 42,
             CyclomaticComplexity: 16,
             LineCount: 1,
-            ParameterCount: 0);
+            ParameterCount: 0,
+            MaintainabilityIndex: 100);
 
         var report = new AnalysisReport(
             RootPath: "src",
@@ -84,7 +91,8 @@ public class JsonReporterTests
             LineNumber: 1,
             CyclomaticComplexity: 20,
             LineCount: 100,
-            ParameterCount: 8);
+            ParameterCount: 8,
+            MaintainabilityIndex: 100);
 
         var report = new AnalysisReport(
             RootPath: "p",
@@ -114,7 +122,7 @@ public class JsonReporterTests
     [Fact]
     public void NonHotspotsAreNotIncludedInFindings()
     {
-        var clean = new MethodMetrics("Clean", "C", "f.cs", 1, 1, 1, 0);
+        var clean = new MethodMetrics("Clean", "C", "f.cs", 1, 1, 1, 0, 100);
         var report = new AnalysisReport(
             RootPath: "p",
             FilesAnalyzed: 1,
@@ -135,5 +143,28 @@ public class JsonReporterTests
 
         var ex = Record.Exception(() => JsonDocument.Parse(raw));
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void MiFindingRendersWithCamelCaseMetricType()
+    {
+        // MI=20, threshold=50 → Error (20 <= 25 = 50/2)
+        var hotspot = MakeMethod(cc: 1, lines: 1, mi: 20);
+        var report = new AnalysisReport(
+            RootPath: "p",
+            FilesAnalyzed: 1,
+            MethodsAnalyzed: 1,
+            Methods: new[] { hotspot },
+            Hotspots: new[] { hotspot });
+
+        var json = Parse(Render(report, DefaultThresholds));
+        var findings = json.GetProperty("findings");
+
+        Assert.Equal(1, findings.GetArrayLength());
+        var f = findings[0];
+        Assert.Equal("maintainabilityIndex", f.GetProperty("metricType").GetString());
+        Assert.Equal(20, f.GetProperty("value").GetInt32());
+        Assert.Equal(50, f.GetProperty("threshold").GetInt32());
+        Assert.Equal("error", f.GetProperty("severity").GetString());
     }
 }

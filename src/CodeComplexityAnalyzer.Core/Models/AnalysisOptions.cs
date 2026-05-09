@@ -3,7 +3,8 @@ namespace CodeComplexityAnalyzer.Core.Models;
 public sealed record Thresholds(
     int CyclomaticComplexity = 10,
     int LineCount = 60,
-    int ParameterCount = 5);
+    int ParameterCount = 5,
+    int MaintainabilityIndex = 50);
 
 public sealed record AnalysisOptions(
     string RootPath,

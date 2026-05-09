@@ -10,7 +10,7 @@ Static code complexity analyzer for C# source. Built on Roslyn syntax APIs (no M
 dotnet run --project src/CodeComplexityAnalyzer.Cli -- samples
 dotnet run --project src/CodeComplexityAnalyzer.Cli -- samples --format json
 dotnet run --project src/CodeComplexityAnalyzer.Cli -- samples --format sarif
-dotnet run --project src/CodeComplexityAnalyzer.Cli -- <path> --max-cc 8 --max-lines 40 --max-params 4
+dotnet run --project src/CodeComplexityAnalyzer.Cli -- <path> --max-cc 8 --max-lines 40 --max-params 4 --min-mi 65
 ```
 
 Exits with code `1` when hotspots are found, `0` when clean, `2` when the path is invalid.
@@ -33,11 +33,12 @@ The workflow `.github/workflows/pr-complexity-comment.yml` runs automatically on
 
 ## Metrics
 
-| Metric | Description |
-|---|---|
-| Cyclomatic complexity | Decision points (`if`, `for`, `while`, `case`, `catch`, `&&`, `\|\|`, `??`, `?:`) + 1 |
-| Line count | Lines spanned by the method body |
-| Parameter count | Number of parameters declared |
+| Metric | Description | Flag when |
+|---|---|---|
+| Cyclomatic complexity | Decision points (`if`, `for`, `while`, `case`, `catch`, `&&`, `\|\|`, `??`, `?:`) + 1 | value > `--max-cc` (default 10) |
+| Line count | Lines spanned by the method body | value > `--max-lines` (default 60) |
+| Parameter count | Number of parameters declared | value > `--max-params` (default 5) |
+| Maintainability index | Simplified MI: `max(0, min(100, 171 − 0.23·CC − 16.2·ln(LOC)))` (Halstead Volume omitted — syntax-only Roslyn) | value < `--min-mi` (default 50); lower = worse |
 
 ## Layout
 

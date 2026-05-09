@@ -54,7 +54,7 @@ public class SarifReporterTests
         Assert.Equal("cca", driver.GetProperty("name").GetString());
 
         var rules = driver.GetProperty("rules");
-        Assert.Equal(3, rules.GetArrayLength());
+        Assert.Equal(4, rules.GetArrayLength());
 
         var results = runs[0].GetProperty("results");
         Assert.Equal(0, results.GetArrayLength());
@@ -71,7 +71,8 @@ public class SarifReporterTests
             LineNumber: 42,
             CyclomaticComplexity: 16,
             LineCount: 1,
-            ParameterCount: 0);
+            ParameterCount: 0,
+            MaintainabilityIndex: 100);
 
         var report = ReportWith("C:\\repo", hotspot);
         var json = Parse(Render(report));
@@ -100,7 +101,8 @@ public class SarifReporterTests
             LineNumber: 1,
             CyclomaticComplexity: 20,
             LineCount: 100,
-            ParameterCount: 8);
+            ParameterCount: 8,
+            MaintainabilityIndex: 100);
 
         var report = ReportWith("C:\\repo", hotspot);
         var json = Parse(Render(report));
@@ -128,7 +130,8 @@ public class SarifReporterTests
             LineNumber: 1,
             CyclomaticComplexity: 14,
             LineCount: 1,
-            ParameterCount: 0);
+            ParameterCount: 0,
+            MaintainabilityIndex: 100);
 
         var report = ReportWith("C:\\repo", hotspot);
         var json = Parse(Render(report));
@@ -149,7 +152,8 @@ public class SarifReporterTests
             LineNumber: 5,
             CyclomaticComplexity: 16,
             LineCount: 1,
-            ParameterCount: 0);
+            ParameterCount: 0,
+            MaintainabilityIndex: 100);
 
         var report = ReportWith("C:\\repo", hotspot);
         var json = Parse(Render(report));
@@ -164,5 +168,28 @@ public class SarifReporterTests
 
         Assert.DoesNotContain('\\', uri);
         Assert.Equal("src/deep/File.cs", uri);
+    }
+
+    [Fact]
+    public void MiFindingProducesCca004RuleId()
+    {
+        // MI=20, threshold default 50; 20 <= 25 → Error
+        var hotspot = new MethodMetrics(
+            MethodName: "M",
+            ContainingType: "C",
+            FilePath: "C:\\repo\\f.cs",
+            LineNumber: 1,
+            CyclomaticComplexity: 1,
+            LineCount: 1,
+            ParameterCount: 0,
+            MaintainabilityIndex: 20);
+
+        var report = ReportWith("C:\\repo", hotspot);
+        var json = Parse(Render(report));
+        var results = json.GetProperty("runs")[0].GetProperty("results");
+
+        Assert.Equal(1, results.GetArrayLength());
+        Assert.Equal("CCA004", results[0].GetProperty("ruleId").GetString());
+        Assert.Equal("error", results[0].GetProperty("level").GetString());
     }
 }

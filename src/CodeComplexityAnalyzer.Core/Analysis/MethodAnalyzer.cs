@@ -11,14 +11,18 @@ public static class MethodAnalyzer
         var startLine = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
         var containingType = FindContainingType(method);
 
+        var cc = CyclomaticComplexityCalculator.Calculate(method);
+        var loc = MethodLengthCalculator.Calculate(method);
+
         return new MethodMetrics(
             MethodName: method.Identifier.Text,
             ContainingType: containingType,
             FilePath: filePath,
             LineNumber: startLine,
-            CyclomaticComplexity: CyclomaticComplexityCalculator.Calculate(method),
-            LineCount: MethodLengthCalculator.Calculate(method),
-            ParameterCount: ParameterCountCalculator.Calculate(method));
+            CyclomaticComplexity: cc,
+            LineCount: loc,
+            ParameterCount: ParameterCountCalculator.Calculate(method),
+            MaintainabilityIndex: MaintainabilityIndexCalculator.Calculate(cc, loc));
     }
 
     private static string FindContainingType(MethodDeclarationSyntax method)

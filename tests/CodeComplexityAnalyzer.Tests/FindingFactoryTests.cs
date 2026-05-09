@@ -7,7 +7,7 @@ public class FindingFactoryTests
 {
     private static readonly Thresholds DefaultThresholds = new(10, 60, 5);
 
-    private static MethodMetrics Method(int cc = 1, int lines = 1, int parameters = 0) =>
+    private static MethodMetrics Method(int cc = 1, int lines = 1, int parameters = 0, int mi = 100) =>
         new(
             MethodName: "M",
             ContainingType: "C",
@@ -15,7 +15,8 @@ public class FindingFactoryTests
             LineNumber: 1,
             CyclomaticComplexity: cc,
             LineCount: lines,
-            ParameterCount: parameters);
+            ParameterCount: parameters,
+            MaintainabilityIndex: mi);
 
     [Fact]
     public void NoViolationsProducesNoFindings()
@@ -73,7 +74,8 @@ public class FindingFactoryTests
             LineNumber: 42,
             CyclomaticComplexity: 11,
             LineCount: 1,
-            ParameterCount: 0);
+            ParameterCount: 0,
+            MaintainabilityIndex: 100);
 
         var finding = FindingFactory.Create(method, DefaultThresholds).Single();
 
@@ -81,5 +83,42 @@ public class FindingFactoryTests
         Assert.Equal("Worker", finding.ContainingType);
         Assert.Equal("src/Worker.cs", finding.FilePath);
         Assert.Equal(42, finding.LineNumber);
+    }
+
+    [Fact]
+    public void MiAboveThresholdProducesNoMiFinding()
+    {
+        // MI=60 >= threshold 50 → no MI finding
+        var findings = FindingFactory.Create(Method(mi: 60), DefaultThresholds).ToList();
+        Assert.DoesNotContain(findings, f => f.MetricType == MetricType.MaintainabilityIndex);
+    }
+
+    [Fact]
+    public void MiJustBelowThresholdProducesWarning()
+    {
+        // MI=49, threshold=50; 49 > 50/2=25 → Warning
+        var findings = FindingFactory.Create(Method(mi: 49), DefaultThresholds).ToList();
+        var miFinding = findings.Single(f => f.MetricType == MetricType.MaintainabilityIndex);
+        Assert.Equal(Severity.Warning, miFinding.Severity);
+        Assert.Equal(49, miFinding.Value);
+        Assert.Equal(50, miFinding.Threshold);
+    }
+
+    [Fact]
+    public void MiAtOrBelowHalfThresholdProducesError()
+    {
+        // MI=25, threshold=50; 25 <= 50/2=25 → Error
+        var findings = FindingFactory.Create(Method(mi: 25), DefaultThresholds).ToList();
+        var miFinding = findings.Single(f => f.MetricType == MetricType.MaintainabilityIndex);
+        Assert.Equal(Severity.Error, miFinding.Severity);
+    }
+
+    [Fact]
+    public void MiWellBelowHalfThresholdProducesError()
+    {
+        // MI=10, threshold=50; 10 <= 25 → Error
+        var findings = FindingFactory.Create(Method(mi: 10), DefaultThresholds).ToList();
+        var miFinding = findings.Single(f => f.MetricType == MetricType.MaintainabilityIndex);
+        Assert.Equal(Severity.Error, miFinding.Severity);
     }
 }
