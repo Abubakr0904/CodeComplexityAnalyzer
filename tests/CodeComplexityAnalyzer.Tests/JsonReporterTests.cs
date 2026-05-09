@@ -15,8 +15,11 @@ public class JsonReporterTests
         return sw.ToString();
     }
 
-    private static JsonElement Parse(string json) =>
-        JsonDocument.Parse(json).RootElement;
+    private static JsonElement Parse(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
 
     [Fact]
     public void EmptyReportProducesEmptyFindingsArray()
@@ -93,6 +96,19 @@ public class JsonReporterTests
         var findings = Parse(Render(report, DefaultThresholds)).GetProperty("findings");
 
         Assert.Equal(3, findings.GetArrayLength());
+
+        var metricTypes = findings.EnumerateArray()
+            .Select(x => x.GetProperty("metricType").GetString()!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "cyclomaticComplexity",
+                "lineCount",
+                "parameterCount",
+            },
+            metricTypes);
     }
 
     [Fact]
