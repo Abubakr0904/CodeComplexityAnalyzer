@@ -267,7 +267,8 @@ h1:focus {
     background-color: #eff6ff;
 }
 
-.drop-zone.dragging textarea {
+.drop-zone.dragging textarea,
+.drop-zone.dragging .monaco-host {
     pointer-events: none;
 }
 
@@ -286,4 +287,13 @@ h1:focus {
 
 .drop-zone.dragging .drop-hint {
     display: flex;
+}
+
+/* ── Monaco editor host ──────────────────────────────────────────────────── */
+.monaco-host {
+    height: 480px;
+    width: 100%;
+    max-width: 1100px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
 }
