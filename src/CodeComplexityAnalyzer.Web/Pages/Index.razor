@@ -94,6 +94,15 @@
         </label>
     </div>
     <div>
+        <label>
+            Branch (optional, defaults to repo's default branch):
+            <input type="text"
+                   size="60"
+                   @bind="_repoBranch"
+                   placeholder="leave empty for default" />
+        </label>
+    </div>
+    <div>
         <button @onclick="AnalyzeRepo" disabled="@_isAnalyzingRepo">Analyze repo</button>
         <button @onclick="CancelRepoAnalysis" disabled="@(!_isAnalyzingRepo)">Cancel</button>
     </div>
@@ -188,7 +197,18 @@
         else
         {
             _repoFindings = entry.Findings.ToList();
-            _repoUrl = entry.SourceId;
+            // SourceId format is "owner/repo@branch" — restore URL and branch separately
+            var atIdx = entry.SourceId.IndexOf('@');
+            if (atIdx >= 0)
+            {
+                _repoUrl = $"https://github.com/{entry.SourceId[..atIdx]}";
+                _repoBranch = entry.SourceId[(atIdx + 1)..];
+            }
+            else
+            {
+                _repoUrl = entry.SourceId;
+                _repoBranch = string.Empty;
+            }
         }
         _maxCc = entry.MaxCc;
         _maxLines = entry.MaxLines;
@@ -236,6 +256,7 @@
     // ── GitHub repo mode ──────────────────────────────────────────────────────
     private string _repoUrl = string.Empty;
     private string _githubToken = string.Empty;
+    private string _repoBranch = string.Empty;
     private string _repoStatus = string.Empty;
     private List<Finding>? _repoFindings;
     private bool _isAnalyzingRepo;
@@ -286,22 +307,31 @@
                 return;
             }
 
-            // Fetch default branch
-            _repoStatus = "Fetching repository info...";
-            StateHasChanged();
-
-            var repoInfo = await GetJsonAsync<GitHubRepo>(
-                $"https://api.github.com/repos/{owner}/{repo}", ct);
-            if (repoInfo is null) return; // error already set in _repoStatus
-
-            var defaultBranch = repoInfo.DefaultBranch;
+            // Resolve branch — use input if provided, otherwise fetch default
+            string branch;
+            if (!string.IsNullOrWhiteSpace(_repoBranch))
+            {
+                branch = _repoBranch.Trim();
+                _repoStatus = $"Analyzing branch '{branch}'...";
+                StateHasChanged();
+            }
+            else
+            {
+                _repoStatus = "Fetching repository info...";
+                StateHasChanged();
+                var repoInfo = await GetJsonAsync<GitHubRepo>(
+                    $"https://api.github.com/repos/{owner}/{repo}", ct);
+                if (repoInfo is null) return;
+                branch = repoInfo.DefaultBranch;
+                _repoBranch = branch;  // auto-fill for subsequent analyses
+            }
 
             // Fetch recursive file tree
             _repoStatus = "Fetching file tree...";
             StateHasChanged();
 
             var tree = await GetJsonAsync<GitHubTreeResponse>(
-                $"https://api.github.com/repos/{owner}/{repo}/git/trees/{defaultBranch}?recursive=1", ct);
+                $"https://api.github.com/repos/{owner}/{repo}/git/trees/{Uri.EscapeDataString(branch)}?recursive=1", ct);
             if (tree is null) return;
 
             var csFiles = tree.Tree
@@ -347,7 +377,7 @@
                     await Task.Yield();
                 }
 
-                var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{defaultBranch}/{path}";
+                var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{Uri.EscapeDataString(branch)}/{path}";
                 var content = await FetchTextAsync(rawUrl, ct);
                 if (content is null)
                 {
@@ -371,10 +401,10 @@
                 ? $" ({_failedDownloads} file(s) could not be downloaded)"
                 : string.Empty;
             _repoStatus = allFindings.Count == 0
-                ? $"Analyzed {actualAnalyzedCount} files — no findings (all within thresholds).{failSuffix}"
-                : $"Analyzed {actualAnalyzedCount} files — {allFindings.Count} finding(s).{failSuffix}";
+                ? $"Analyzed {actualAnalyzedCount} files on branch '{branch}' — no findings (all within thresholds).{failSuffix}"
+                : $"Analyzed {actualAnalyzedCount} files on branch '{branch}' — {allFindings.Count} finding(s).{failSuffix}";
 
-            await RecordHistory("github", $"{owner}/{repo}", allFindings);
+            await RecordHistory("github", $"{owner}/{repo}@{branch}", allFindings);
         }
         finally
         {
