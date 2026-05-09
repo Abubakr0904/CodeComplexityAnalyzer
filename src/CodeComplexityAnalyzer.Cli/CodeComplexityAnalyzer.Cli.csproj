@@ -14,4 +14,8 @@
     <ProjectReference Include="..\CodeComplexityAnalyzer.Core\CodeComplexityAnalyzer.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="CodeComplexityAnalyzer.Cli.Tests" />
+  </ItemGroup>
+
 </Project>
