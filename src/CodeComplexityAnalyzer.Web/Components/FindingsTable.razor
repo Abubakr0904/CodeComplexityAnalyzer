@@ -1,0 +1,68 @@
+@using CodeComplexityAnalyzer.Core.Reporting
+
+@if (Findings is null)
+{
+    <p><em>Run an analysis to see findings.</em></p>
+}
+else
+{
+    var errorCount = Findings.Count(f => f.Severity == Severity.Error);
+    var warningCount = Findings.Count(f => f.Severity == Severity.Warning);
+    var fileCount = Findings.Select(f => f.FilePath).Distinct().Count();
+
+    <div class="findings-summary">
+        <span class="badge badge-error">@errorCount error@(errorCount == 1 ? "" : "s")</span>
+        <span class="badge badge-warning">@warningCount warning@(warningCount == 1 ? "" : "s")</span>
+        <span class="files-count">@fileCount file@(fileCount == 1 ? "" : "s") with findings</span>
+    </div>
+
+    @if (Findings.Count == 0)
+    {
+        <p>No findings — code is within thresholds.</p>
+    }
+    else
+    {
+        <div class="findings-table-wrapper">
+            <table class="findings-table">
+                <thead>
+                    <tr>
+                        <th>Severity</th>
+                        <th>Metric</th>
+                        <th>Method</th>
+                        <th>Type</th>
+                        <th>File</th>
+                        <th>Line</th>
+                        <th>Value</th>
+                        <th>Threshold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var f in Findings)
+                    {
+                        <tr class="@SeverityRowClass(f.Severity)">
+                            <td><span class="badge @SeverityBadgeClass(f.Severity)">@f.Severity</span></td>
+                            <td>@f.MetricType</td>
+                            <td>@f.MethodName</td>
+                            <td>@f.ContainingType</td>
+                            <td>@f.FilePath</td>
+                            <td>@f.LineNumber</td>
+                            <td>@f.Value</td>
+                            <td>@f.Threshold</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<Finding>? Findings { get; set; }
+
+    private static string SeverityRowClass(Severity s) =>
+        s == Severity.Error ? "row-error" : "row-warning";
+
+    private static string SeverityBadgeClass(Severity s) =>
+        s == Severity.Error ? "badge-error" : "badge-warning";
+}

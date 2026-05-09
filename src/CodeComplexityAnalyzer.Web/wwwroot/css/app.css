@@ -30,3 +30,71 @@ h1:focus {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* ── Findings table ──────────────────────────────────────────────────────── */
+.findings-summary {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin: 0.75rem 0;
+    flex-wrap: wrap;
+}
+
+.findings-summary .files-count {
+    color: #555;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.15em 0.65em;
+    font-size: 0.85em;
+    font-weight: 600;
+    border-radius: 999px;
+    line-height: 1.4;
+}
+
+.badge-error {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.findings-table-wrapper {
+    overflow-x: auto;
+    margin-top: 0.5rem;
+}
+
+.findings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+.findings-table th,
+.findings-table td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.findings-table th {
+    background-color: #f9fafb;
+    font-weight: 600;
+}
+
+.findings-table tr.row-error {
+    border-left: 3px solid #ef4444;
+}
+
+.findings-table tr.row-warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.findings-table tr.row-error td:first-child,
+.findings-table tr.row-warning td:first-child {
+    padding-left: 0.5rem;
+}

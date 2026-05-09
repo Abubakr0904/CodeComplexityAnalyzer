@@ -28,14 +28,7 @@
     <button @onclick="Analyze" disabled="@_isAnalyzing">Analyze</button>
 </div>
 
-@if (_findings is not null)
-{
-    @RenderFindings(_findings)
-}
-else
-{
-    <p><em>Paste code above and click Analyze.</em></p>
-}
+<FindingsTable Findings="_findings" />
 
 <hr />
 
@@ -71,10 +64,7 @@ else
     <p class="repo-status">@_repoStatus</p>
 }
 
-@if (_repoFindings is not null)
-{
-    @RenderFindings(_repoFindings)
-}
+<FindingsTable Findings="_repoFindings" />
 
 @code {
     // ── Paste mode ────────────────────────────────────────────────────────────
@@ -394,47 +384,4 @@ else
 
         return $"GitHub API error: HTTP {status}.";
     }
-
-    // ── Shared rendering helper ───────────────────────────────────────────────
-    private RenderFragment RenderFindings(List<Finding> findings) => __builder =>
-    {
-        if (findings.Count == 0)
-        {
-            __builder.OpenElement(0, "p");
-            __builder.AddContent(1, "No findings — code is within thresholds.");
-            __builder.CloseElement();
-        }
-        else
-        {
-            __builder.OpenElement(0, "table");
-            __builder.AddAttribute(1, "class", "findings");
-
-            __builder.OpenElement(2, "thead");
-            __builder.OpenElement(3, "tr");
-            foreach (var header in new[] { "Severity", "Metric", "File", "Method", "Type", "Line", "Value", "Threshold" })
-            {
-                __builder.OpenElement(4, "th");
-                __builder.AddContent(5, header);
-                __builder.CloseElement();
-            }
-            __builder.CloseElement(); // tr
-            __builder.CloseElement(); // thead
-
-            __builder.OpenElement(6, "tbody");
-            var seq = 7;
-            foreach (var f in findings)
-            {
-                __builder.OpenElement(seq++, "tr");
-                foreach (var cell in new[] { f.Severity.ToString(), f.MetricType.ToString(), f.FilePath, f.MethodName, f.ContainingType, f.LineNumber.ToString(), f.Value.ToString(), f.Threshold.ToString() })
-                {
-                    __builder.OpenElement(seq++, "td");
-                    __builder.AddContent(seq++, cell);
-                    __builder.CloseElement();
-                }
-                __builder.CloseElement(); // tr
-            }
-            __builder.CloseElement(); // tbody
-            __builder.CloseElement(); // table
-        }
-    };
 }
