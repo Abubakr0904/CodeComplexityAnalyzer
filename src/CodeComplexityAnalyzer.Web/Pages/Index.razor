@@ -487,7 +487,8 @@
     {
         if (!TryParseRepoUrl(_repoUrl, out var owner, out var repo)) return;
         var branch = string.IsNullOrWhiteSpace(_repoBranch) ? "main" : _repoBranch.Trim();
-        var url = $"https://github.com/{owner}/{repo}/blob/{Uri.EscapeDataString(branch)}/{f.FilePath}#L{f.LineNumber}";
+        var escapedPath = string.Join("/", f.FilePath.Split('/', '\\').Select(Uri.EscapeDataString));
+        var url = $"https://github.com/{owner}/{repo}/blob/{Uri.EscapeDataString(branch)}/{escapedPath}#L{f.LineNumber}";
         await JS.InvokeVoidAsync("open", url, "_blank");
     }
 
