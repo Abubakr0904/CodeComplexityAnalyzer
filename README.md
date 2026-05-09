@@ -27,6 +27,10 @@ Upload findings to GitHub code scanning:
     category: cca
 ```
 
+## PR comment bot
+
+The workflow `.github/workflows/pr-complexity-comment.yml` runs automatically on every pull request targeting `main`. It runs `cca` against `src/`, then posts (or updates) a sticky comment on the PR summarising findings grouped by severity. If the analysis is clean, the comment says so. The comment is updated in place on subsequent pushes — it does not stack.
+
 ## Metrics
 
 | Metric | Description |
