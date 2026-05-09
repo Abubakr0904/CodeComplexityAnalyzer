@@ -75,6 +75,10 @@
 
 <div>
     <button @onclick="Analyze" disabled="@_isAnalyzing">Analyze</button>
+    <label class="auto-toggle">
+        <input type="checkbox" @bind="_autoAnalyze" />
+        Auto-analyze (debounced 400ms)
+    </label>
 </div>
 
 <FindingsTable Findings="_findings" OnFindingClick="HandleFindingClickPaste" />
@@ -156,11 +160,32 @@
     }
 
     [JSInvokable]
-    public void OnEditorContentChanged(string value)
+    public async Task OnEditorContentChanged(string value)
     {
         _sourceCode = value;
         _lastEditorValue = value;
+
+        if (!_autoAnalyze)
+        {
+            StateHasChanged();
+            return;
+        }
+
+        // Debounce: cancel any pending analysis, schedule a new one
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var ct = _debounceCts.Token;
+
         StateHasChanged();
+
+        try
+        {
+            await Task.Delay(DebounceMs, ct);
+            if (ct.IsCancellationRequested) return;
+            await AnalyzeWithoutHistory();
+        }
+        catch (TaskCanceledException) { /* expected on debounce */ }
     }
 
     private async Task LoadHistoryAsync()
@@ -256,6 +281,9 @@
     private bool _editorInitialized = false;
     private string _lastEditorValue = string.Empty;
     private bool _isDragging = false;
+    private bool _autoAnalyze = true;
+    private CancellationTokenSource? _debounceCts;
+    private const int DebounceMs = 400;
 
     private void OnDragEnter(DragEventArgs e) => _isDragging = true;
     private void OnDragOver(DragEventArgs e) => _isDragging = true;
@@ -293,7 +321,11 @@
     private List<Finding>? _findings;
     private bool _isAnalyzing;
 
-    private async Task Analyze()
+    private async Task Analyze() => await AnalyzeCore(recordHistory: true);
+
+    private async Task AnalyzeWithoutHistory() => await AnalyzeCore(recordHistory: false);
+
+    private async Task AnalyzeCore(bool recordHistory)
     {
         _isAnalyzing = true;
         try
@@ -306,11 +338,15 @@
                 .SelectMany(m => FindingFactory.Create(m, thresholds))
                 .ToList();
 
-            await RecordHistory("paste", "input.cs", _findings.ToList());
+            if (recordHistory && _findings.Count > 0)
+            {
+                await RecordHistory("paste", "input.cs", _findings.ToList());
+            }
         }
         finally
         {
             _isAnalyzing = false;
+            StateHasChanged();
         }
     }
 
@@ -494,6 +530,8 @@
 
     public void Dispose()
     {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
         _repoCts?.Cancel();
         _repoCts?.Dispose();
         _selfRef?.Dispose();
