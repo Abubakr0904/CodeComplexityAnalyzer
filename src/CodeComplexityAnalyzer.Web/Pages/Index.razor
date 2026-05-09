@@ -215,12 +215,13 @@ else
             }
 
             _repoFindings = allFindings;
+            var actualAnalyzedCount = total - _failedDownloads;
             var failSuffix = _failedDownloads > 0
                 ? $" ({_failedDownloads} file(s) could not be downloaded)"
                 : string.Empty;
             _repoStatus = allFindings.Count == 0
-                ? $"Analyzed {total} files — no findings (all within thresholds).{failSuffix}"
-                : $"Analyzed {total} files — {allFindings.Count} finding(s).{failSuffix}";
+                ? $"Analyzed {actualAnalyzedCount} files — no findings (all within thresholds).{failSuffix}"
+                : $"Analyzed {actualAnalyzedCount} files — {allFindings.Count} finding(s).{failSuffix}";
         }
         finally
         {
