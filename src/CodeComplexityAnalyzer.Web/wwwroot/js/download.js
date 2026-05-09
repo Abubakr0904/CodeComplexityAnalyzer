@@ -68,10 +68,11 @@ window.ccaMonaco = (() => {
             await ensureMonaco();
             const el = document.getElementById(elementId);
             if (!el) return false;
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
             const editor = monaco.editor.create(el, {
                 value: initialValue || '',
                 language: 'csharp',
-                theme: 'vs',
+                theme: isDark ? 'vs-dark' : 'vs',
                 automaticLayout: true,
                 minimap: { enabled: false },
                 fontSize: 14,
@@ -85,6 +86,11 @@ window.ccaMonaco = (() => {
             });
             editors.set(elementId, editor);
             return true;
+        },
+        setTheme(theme) {
+            if (typeof monaco !== 'undefined' && monaco.editor && monaco.editor.setTheme) {
+                monaco.editor.setTheme(theme);
+            }
         },
         setValue(elementId, value) {
             const ed = editors.get(elementId);
@@ -114,6 +120,46 @@ window.ccaMonaco = (() => {
             }]);
             setTimeout(() => decoration.clear(), 2000);
             return true;
+        }
+    };
+})();
+
+window.ccaTheme = (() => {
+    const KEY = 'cca-theme';
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function resolveEffective(setting) {
+        if (setting === 'dark') return 'dark';
+        if (setting === 'light') return 'light';
+        return mediaQuery.matches ? 'dark' : 'light';
+    }
+
+    function apply(setting) {
+        const effective = resolveEffective(setting);
+        document.documentElement.setAttribute('data-theme', effective);
+        return effective;
+    }
+
+    return {
+        init() {
+            const saved = localStorage.getItem(KEY) || 'system';
+            const effective = apply(saved);
+            mediaQuery.addEventListener('change', () => {
+                const current = localStorage.getItem(KEY) || 'system';
+                if (current === 'system') apply('system');
+            });
+            return { setting: saved, effective };
+        },
+        set(setting) {
+            localStorage.setItem(KEY, setting);
+            return apply(setting);
+        },
+        get() {
+            return localStorage.getItem(KEY) || 'system';
+        },
+        getEffective() {
+            const setting = localStorage.getItem(KEY) || 'system';
+            return resolveEffective(setting);
         }
     };
 })();
