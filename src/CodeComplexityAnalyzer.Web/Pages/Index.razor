@@ -5,6 +5,7 @@
 @using System.Net.Http.Headers
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@implements IDisposable
 @inject HttpClient Http
 
 <PageTitle>Code Complexity Analyzer</PageTitle>
@@ -61,6 +62,7 @@ else
     </div>
     <div>
         <button @onclick="AnalyzeRepo" disabled="@_isAnalyzingRepo">Analyze repo</button>
+        <button @onclick="CancelRepoAnalysis" disabled="@(!_isAnalyzingRepo)">Cancel</button>
     </div>
 </div>
 
@@ -109,6 +111,7 @@ else
     private List<Finding>? _repoFindings;
     private bool _isAnalyzingRepo;
     private int _failedDownloads;
+    private CancellationTokenSource? _repoCts;
 
     // DTOs for GitHub API responses
     private sealed record GitHubRepo(
@@ -133,6 +136,12 @@ else
 
     private async Task AnalyzeRepo()
     {
+        // Cancel any in-flight analysis and start fresh
+        _repoCts?.Cancel();
+        _repoCts?.Dispose();
+        _repoCts = new CancellationTokenSource();
+        var ct = _repoCts.Token;
+
         _repoFindings = null;
         _repoStatus = string.Empty;
         _failedDownloads = 0;
@@ -153,7 +162,7 @@ else
             StateHasChanged();
 
             var repoInfo = await GetJsonAsync<GitHubRepo>(
-                $"https://api.github.com/repos/{owner}/{repo}");
+                $"https://api.github.com/repos/{owner}/{repo}", ct);
             if (repoInfo is null) return; // error already set in _repoStatus
 
             var defaultBranch = repoInfo.DefaultBranch;
@@ -163,7 +172,7 @@ else
             StateHasChanged();
 
             var tree = await GetJsonAsync<GitHubTreeResponse>(
-                $"https://api.github.com/repos/{owner}/{repo}/git/trees/{defaultBranch}?recursive=1");
+                $"https://api.github.com/repos/{owner}/{repo}/git/trees/{defaultBranch}?recursive=1", ct);
             if (tree is null) return;
 
             var csFiles = tree.Tree
@@ -193,6 +202,13 @@ else
 
             for (var i = 0; i < csFiles.Count; i++)
             {
+                if (ct.IsCancellationRequested)
+                {
+                    _repoStatus = "Cancelled.";
+                    _repoFindings = allFindings.Count > 0 ? allFindings : null;
+                    return;
+                }
+
                 var path = csFiles[i];
                 _repoStatus = $"Analyzing {i + 1}/{total}: {path}";
 
@@ -203,9 +219,15 @@ else
                 }
 
                 var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{defaultBranch}/{path}";
-                var content = await FetchTextAsync(rawUrl);
+                var content = await FetchTextAsync(rawUrl, ct);
                 if (content is null)
                 {
+                    if (ct.IsCancellationRequested)
+                    {
+                        _repoStatus = "Cancelled.";
+                        _repoFindings = allFindings.Count > 0 ? allFindings : null;
+                        return;
+                    }
                     _failedDownloads++;
                     continue;
                 }
@@ -228,6 +250,14 @@ else
             _isAnalyzingRepo = false;
             StateHasChanged();
         }
+    }
+
+    private void CancelRepoAnalysis() => _repoCts?.Cancel();
+
+    public void Dispose()
+    {
+        _repoCts?.Cancel();
+        _repoCts?.Dispose();
     }
 
     private static bool TryParseRepoUrl(string url, out string owner, out string repo)
@@ -255,13 +285,17 @@ else
         return !string.IsNullOrEmpty(owner) && !string.IsNullOrEmpty(repo);
     }
 
-    private async Task<T?> GetJsonAsync<T>(string url) where T : class
+    private async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct = default) where T : class
     {
         using var request = BuildRequest(HttpMethod.Get, url);
         HttpResponseMessage response;
         try
         {
-            response = await Http.SendAsync(request);
+            response = await Http.SendAsync(request, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
         catch (Exception ex)
         {
@@ -275,7 +309,7 @@ else
             return null;
         }
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(ct);
         try
         {
             return JsonSerializer.Deserialize<T>(json);
@@ -287,13 +321,17 @@ else
         }
     }
 
-    private async Task<string?> FetchTextAsync(string url)
+    private async Task<string?> FetchTextAsync(string url, CancellationToken ct = default)
     {
         using var request = BuildRequest(HttpMethod.Get, url);
         HttpResponseMessage response;
         try
         {
-            response = await Http.SendAsync(request);
+            response = await Http.SendAsync(request, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
         catch (Exception ex)
         {
@@ -307,7 +345,7 @@ else
             return null;
         }
 
-        return await response.Content.ReadAsStringAsync();
+        return await response.Content.ReadAsStringAsync(ct);
     }
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string url)
