@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CodeComplexityAnalyzer.Cli</RootNamespace>
+    <AssemblyName>cca</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CodeComplexityAnalyzer.Core\CodeComplexityAnalyzer.Core.csproj" />
+  </ItemGroup>
+
+</Project>
