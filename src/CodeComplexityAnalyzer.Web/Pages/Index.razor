@@ -13,6 +13,15 @@
 
 <h1>Code Complexity Analyzer</h1>
 
+<div class="theme-toggle">
+    <label for="themeSelect">Theme:</label>
+    <select id="themeSelect" @bind="_theme" @bind:after="OnThemeChange">
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+    </select>
+</div>
+
 <div class="history-panel-container">
     <button class="history-toggle" @onclick="() => _historyOpen = !_historyOpen" disabled="@(_history.Count == 0)">
         History (@_history.Count)
@@ -129,6 +138,18 @@
 <FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" />
 
 @code {
+    // ── Theme ─────────────────────────────────────────────────────────────────
+    private string _theme = "system";
+
+    private async Task OnThemeChange()
+    {
+        var effective = await JS.InvokeAsync<string>("ccaTheme.set", _theme);
+        if (_editorInitialized)
+        {
+            await JS.InvokeVoidAsync("ccaMonaco.setTheme", effective == "dark" ? "vs-dark" : "vs");
+        }
+    }
+
     // ── History ───────────────────────────────────────────────────────────────
     private const string HistoryKey = "cca-history-v1";
     private const int HistoryMax = 20;
@@ -146,6 +167,13 @@
     {
         if (firstRender)
         {
+            try
+            {
+                await JS.InvokeVoidAsync("ccaTheme.init");
+                _theme = await JS.InvokeAsync<string>("ccaTheme.get") ?? "system";
+            }
+            catch { _theme = "system"; }
+            StateHasChanged();
             await LoadHistoryAsync();
             _selfRef = DotNetObjectReference.Create(this);
             var ok = await JS.InvokeAsync<bool>("ccaMonaco.create", _editorId, _sourceCode, _selfRef);
