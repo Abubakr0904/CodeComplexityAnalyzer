@@ -154,3 +154,62 @@ h1:focus {
     background-color: white;
     border-radius: 4px;
 }
+
+/* ── Filter and sort controls ────────────────────────────────────────────── */
+.findings-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    align-items: center;
+    margin: 0.75rem 0 0.5rem;
+    padding: 0.6rem 0.85rem;
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.findings-controls .filter-group {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.findings-controls .control-label {
+    color: #4b5563;
+    font-weight: 600;
+}
+
+.findings-controls .filter-btn {
+    padding: 0.2rem 0.65rem;
+    font-size: 0.9em;
+    background-color: white;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.findings-controls .filter-btn:hover {
+    background-color: #f3f4f6;
+}
+
+.findings-controls .filter-btn-active {
+    background-color: #1f2937;
+    color: white;
+    border-color: #1f2937;
+}
+
+.findings-controls .metric-checkbox {
+    display: inline-flex;
+    gap: 0.25rem;
+    align-items: center;
+    cursor: pointer;
+}
+
+.findings-controls select {
+    padding: 0.2rem 0.4rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background-color: white;
+}
