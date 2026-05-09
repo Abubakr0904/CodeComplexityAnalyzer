@@ -1,4 +1,5 @@
 @using CodeComplexityAnalyzer.Core.Reporting
+@inject Microsoft.JSInterop.IJSRuntime JS
 
 @if (Findings is null)
 {
@@ -45,13 +46,19 @@ else
         </div>
     </div>
 
+    <button type="button" class="csv-download-btn"
+            @onclick="DownloadCsv"
+            disabled="@(Findings is null || Findings!.Count == 0)">
+        Download CSV
+    </button>
+
     <div class="findings-summary">
         <span class="badge badge-error">@errorCount error@(errorCount == 1 ? "" : "s")</span>
         <span class="badge badge-warning">@warningCount warning@(warningCount == 1 ? "" : "s")</span>
         <span class="files-count">@fileCount file@(fileCount == 1 ? "" : "s") with findings</span>
     </div>
 
-    @if (Findings.Count == 0)
+    @if (Findings!.Count == 0)
     {
         <p>No findings — code is within thresholds.</p>
     }
@@ -207,6 +214,43 @@ else
 
     private static string FilterBtnClass(bool active) =>
         active ? "filter-btn filter-btn-active" : "filter-btn";
+
+    private async Task DownloadCsv()
+    {
+        var rows = FilteredFindings().ToList();
+        if (rows.Count == 0) return;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("severity,metric,file,line,method,type,value,threshold");
+        foreach (var f in rows)
+        {
+            sb.AppendLine(string.Join(",", new[]
+            {
+                CsvEscape(f.Severity.ToString()),
+                CsvEscape(f.MetricType.ToString()),
+                CsvEscape(f.FilePath),
+                f.LineNumber.ToString(),
+                CsvEscape(f.MethodName),
+                CsvEscape(f.ContainingType),
+                f.Value.ToString(),
+                f.Threshold.ToString(),
+            }));
+        }
+
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var filename = $"cca-findings-{stamp}.csv";
+        await JS.InvokeVoidAsync("ccaDownload", filename, sb.ToString(), "text/csv");
+    }
+
+    private static string CsvEscape(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+        {
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
 
     private List<FileGroup> BuildGroups(IReadOnlyList<Finding> findings)
     {
