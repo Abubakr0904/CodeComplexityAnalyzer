@@ -5,4 +5,5 @@ public enum MetricType
     CyclomaticComplexity,
     LineCount,
     ParameterCount,
+    MaintainabilityIndex,
 }

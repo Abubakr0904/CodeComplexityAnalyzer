@@ -37,6 +37,11 @@ public static class Runner
             getDefaultValue: () => 5,
             description: "Method parameter count threshold.");
 
+        var minMiOption = new Option<int>(
+            name: "--min-mi",
+            getDefaultValue: () => 50,
+            description: "Maintainability index minimum; methods below this are flagged (0-100, lower = worse).");
+
         var rootCommand = new RootCommand("Static code complexity analyzer for C#.")
         {
             pathArg,
@@ -44,12 +49,13 @@ public static class Runner
             maxCcOption,
             maxLinesOption,
             maxParamsOption,
+            minMiOption,
         };
 
         var exitCode = 0;
 
         rootCommand.SetHandler(
-            (path, format, maxCc, maxLines, maxParams) =>
+            (path, format, maxCc, maxLines, maxParams, minMi) =>
             {
                 if (!File.Exists(path) && !Directory.Exists(path))
                 {
@@ -58,9 +64,16 @@ public static class Runner
                     return;
                 }
 
+                if (minMi is < 0 or > 100)
+                {
+                    errWriter.WriteLine($"--min-mi must be between 0 and 100 (got {minMi}).");
+                    exitCode = 2;
+                    return;
+                }
+
                 var options = new AnalysisOptions(
                     RootPath: path,
-                    Thresholds: new Thresholds(maxCc, maxLines, maxParams),
+                    Thresholds: new Thresholds(maxCc, maxLines, maxParams, minMi),
                     ExcludeDirectories: ["bin", "obj", ".git", "node_modules"]);
 
                 var sources = FileSourceCollector.Collect(options.RootPath, options.ExcludeDirectories);
@@ -82,7 +95,7 @@ public static class Runner
                     exitCode = 1;
                 }
             },
-            pathArg, formatOption, maxCcOption, maxLinesOption, maxParamsOption);
+            pathArg, formatOption, maxCcOption, maxLinesOption, maxParamsOption, minMiOption);
 
         var parseResult = await rootCommand.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;

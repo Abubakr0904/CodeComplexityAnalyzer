@@ -45,6 +45,14 @@ public sealed class SarifReporter : IReporter
             FullDescription: new SarifMessage("Method has more parameters than the configured threshold. Excess parameters often signal a missing data abstraction."),
             DefaultConfiguration: new SarifRuleConfiguration("warning"),
             HelpUri: HelpUri),
+
+        new SarifRule(
+            Id: "CCA004",
+            Name: "MaintainabilityIndex",
+            ShortDescription: new SarifMessage("Method maintainability index is below threshold."),
+            FullDescription: new SarifMessage("Maintainability index (simplified: no Halstead Volume) is below the configured minimum. Lower values indicate harder-to-maintain code."),
+            DefaultConfiguration: new SarifRuleConfiguration("warning"),
+            HelpUri: HelpUri),
     ];
 
     private readonly Thresholds _thresholds;
@@ -90,6 +98,7 @@ public sealed class SarifReporter : IReporter
             MetricType.CyclomaticComplexity => "CCA001",
             MetricType.LineCount => "CCA002",
             MetricType.ParameterCount => "CCA003",
+            MetricType.MaintainabilityIndex => "CCA004",
             _ => throw new InvalidOperationException($"Unknown MetricType: {finding.MetricType}"),
         };
 
@@ -105,11 +114,13 @@ public sealed class SarifReporter : IReporter
             MetricType.CyclomaticComplexity => "cyclomatic complexity",
             MetricType.LineCount => "line count",
             MetricType.ParameterCount => "parameter count",
+            MetricType.MaintainabilityIndex => "maintainability index",
             _ => throw new InvalidOperationException($"Unknown MetricType: {finding.MetricType}"),
         };
 
+        var thresholdRelation = finding.MetricType == MetricType.MaintainabilityIndex ? "minimum" : "threshold";
         var messageText =
-            $"Method '{finding.MethodName}' has {metricLabel} {finding.Value} (threshold: {finding.Threshold}).";
+            $"Method '{finding.MethodName}' has {metricLabel} {finding.Value} ({thresholdRelation}: {finding.Threshold}).";
 
         var uri = BuildUri(finding.FilePath, rootPath);
 

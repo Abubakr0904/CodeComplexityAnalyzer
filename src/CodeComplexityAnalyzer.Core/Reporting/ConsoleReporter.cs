@@ -18,13 +18,13 @@ public sealed class ConsoleReporter : IReporter
             return;
         }
 
-        writer.WriteLine($"{"CC",-5} {"Lines",-6} {"Params",-7} Method");
+        writer.WriteLine($"{"CC",-5} {"Lines",-6} {"Params",-7} {"MI",-5} Method");
         writer.WriteLine(new string('-', 80));
 
         foreach (var m in report.Hotspots)
         {
             var location = $"{m.ContainingType}.{m.MethodName}  ({m.FilePath}:{m.LineNumber})";
-            writer.WriteLine($"{m.CyclomaticComplexity,-5} {m.LineCount,-6} {m.ParameterCount,-7} {location}");
+            writer.WriteLine($"{m.CyclomaticComplexity,-5} {m.LineCount,-6} {m.ParameterCount,-7} {m.MaintainabilityIndex,-5} {location}");
         }
     }
 }

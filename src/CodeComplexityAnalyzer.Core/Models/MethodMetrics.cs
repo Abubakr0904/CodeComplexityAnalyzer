@@ -7,4 +7,5 @@ public sealed record MethodMetrics(
     int LineNumber,
     int CyclomaticComplexity,
     int LineCount,
-    int ParameterCount);
+    int ParameterCount,
+    int MaintainabilityIndex);

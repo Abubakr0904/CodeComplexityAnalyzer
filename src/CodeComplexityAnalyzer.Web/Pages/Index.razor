@@ -16,6 +16,7 @@
     <label>Max cyclomatic complexity: <input type="number" min="1" @bind="_maxCc" /></label>
     <label>Max method line count: <input type="number" min="1" @bind="_maxLines" /></label>
     <label>Max parameter count: <input type="number" min="0" @bind="_maxParams" /></label>
+    <label>Min maintainability index (0-100): <input type="number" min="0" max="100" @bind="_minMi" /></label>
 </div>
 
 <hr />
@@ -72,6 +73,7 @@
     private int _maxCc = 10;
     private int _maxLines = 60;
     private int _maxParams = 5;
+    private int _minMi = 50;
     private List<Finding>? _findings;
     private bool _isAnalyzing;
 
@@ -81,7 +83,7 @@
         try
         {
             var analyzer = new SyntaxAnalyzer();
-            var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams);
+            var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
             var metrics = analyzer.AnalyzeSource(_sourceCode ?? string.Empty, "input.cs");
 
             _findings = metrics
@@ -186,7 +188,7 @@
 
             // Analyze each file
             var analyzer = new SyntaxAnalyzer();
-            var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams);
+            var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
             var allFindings = new List<Finding>();
             var total = csFiles.Count;
 

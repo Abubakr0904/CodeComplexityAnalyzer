@@ -47,5 +47,7 @@ public sealed class SyntaxAnalyzer : IAnalyzer
     private static bool IsHotspot(MethodMetrics m, Thresholds t) =>
         m.CyclomaticComplexity > t.CyclomaticComplexity ||
         m.LineCount > t.LineCount ||
-        m.ParameterCount > t.ParameterCount;
+        m.ParameterCount > t.ParameterCount ||
+        // MI is inverted: lower values indicate worse maintainability
+        m.MaintainabilityIndex < t.MaintainabilityIndex;
 }
