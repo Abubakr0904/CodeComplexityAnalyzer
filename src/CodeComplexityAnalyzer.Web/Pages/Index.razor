@@ -2,6 +2,10 @@
 @using CodeComplexityAnalyzer.Core.Analysis
 @using CodeComplexityAnalyzer.Core.Models
 @using CodeComplexityAnalyzer.Core.Reporting
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
 
 <PageTitle>Code Complexity Analyzer</PageTitle>
 
@@ -13,52 +17,65 @@
     <label>Max parameter count: <input type="number" min="0" @bind="_maxParams" /></label>
 </div>
 
+<hr />
+
+<h2>Paste C# source</h2>
+
 <textarea rows="20" cols="100" @bind="_sourceCode" placeholder="Paste C# source here..." />
 
 <div>
     <button @onclick="Analyze" disabled="@_isAnalyzing">Analyze</button>
 </div>
 
-@if (_findings is null)
+@if (_findings is not null)
 {
-    <p><em>Paste code above and click Analyze.</em></p>
-}
-else if (_findings.Count == 0)
-{
-    <p>No findings — code is within thresholds.</p>
+    @RenderFindings(_findings)
 }
 else
 {
-    <table class="findings">
-        <thead>
-            <tr>
-                <th>Severity</th>
-                <th>Metric</th>
-                <th>Method</th>
-                <th>Type</th>
-                <th>Line</th>
-                <th>Value</th>
-                <th>Threshold</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var f in _findings)
-            {
-                <tr>
-                    <td>@f.Severity</td>
-                    <td>@f.MetricType</td>
-                    <td>@f.MethodName</td>
-                    <td>@f.ContainingType</td>
-                    <td>@f.LineNumber</td>
-                    <td>@f.Value</td>
-                    <td>@f.Threshold</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <p><em>Paste code above and click Analyze.</em></p>
+}
+
+<hr />
+
+<h2>Analyze a GitHub repo</h2>
+
+<div class="github-inputs">
+    <div>
+        <label>
+            GitHub repo URL:
+            <input type="text"
+                   size="60"
+                   @bind="_repoUrl"
+                   placeholder="https://github.com/owner/repo" />
+        </label>
+    </div>
+    <div>
+        <label>
+            Personal access token (optional, raises rate limit):
+            <input type="password"
+                   size="60"
+                   @bind="_githubToken"
+                   placeholder="ghp_..." />
+        </label>
+    </div>
+    <div>
+        <button @onclick="AnalyzeRepo" disabled="@_isAnalyzingRepo">Analyze repo</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_repoStatus))
+{
+    <p class="repo-status">@_repoStatus</p>
+}
+
+@if (_repoFindings is not null)
+{
+    @RenderFindings(_repoFindings)
 }
 
 @code {
+    // ── Paste mode ────────────────────────────────────────────────────────────
     private string _sourceCode = string.Empty;
     private int _maxCc = 10;
     private int _maxLines = 60;
@@ -84,4 +101,287 @@ else
             _isAnalyzing = false;
         }
     }
+
+    // ── GitHub repo mode ──────────────────────────────────────────────────────
+    private string _repoUrl = string.Empty;
+    private string _githubToken = string.Empty;
+    private string _repoStatus = string.Empty;
+    private List<Finding>? _repoFindings;
+    private bool _isAnalyzingRepo;
+
+    // DTOs for GitHub API responses
+    private sealed record GitHubRepo(
+        [property: JsonPropertyName("default_branch")] string DefaultBranch);
+
+    private sealed record GitHubTreeResponse(
+        [property: JsonPropertyName("tree")] List<GitHubTreeNode> Tree,
+        [property: JsonPropertyName("truncated")] bool Truncated = false);
+
+    private sealed record GitHubTreeNode(
+        [property: JsonPropertyName("path")] string Path,
+        [property: JsonPropertyName("type")] string Type);
+
+    private static readonly HashSet<string> ExcludedDirNames =
+        new(StringComparer.OrdinalIgnoreCase) { "bin", "obj", "node_modules" };
+
+    private static bool HasExcludedSegment(string path)
+    {
+        var segments = path.Split('/', '\\');
+        return segments.Any(ExcludedDirNames.Contains);
+    }
+
+    private async Task AnalyzeRepo()
+    {
+        _repoFindings = null;
+        _repoStatus = string.Empty;
+        _isAnalyzingRepo = true;
+        StateHasChanged();
+
+        try
+        {
+            // Parse owner/repo from URL
+            if (!TryParseRepoUrl(_repoUrl, out var owner, out var repo))
+            {
+                _repoStatus = "Invalid URL. Expected: https://github.com/owner/repo";
+                return;
+            }
+
+            // Fetch default branch
+            _repoStatus = "Fetching repository info...";
+            StateHasChanged();
+
+            var repoInfo = await GetJsonAsync<GitHubRepo>(
+                $"https://api.github.com/repos/{owner}/{repo}");
+            if (repoInfo is null) return; // error already set in _repoStatus
+
+            var defaultBranch = repoInfo.DefaultBranch;
+
+            // Fetch recursive file tree
+            _repoStatus = "Fetching file tree...";
+            StateHasChanged();
+
+            var tree = await GetJsonAsync<GitHubTreeResponse>(
+                $"https://api.github.com/repos/{owner}/{repo}/git/trees/{defaultBranch}?recursive=1");
+            if (tree is null) return;
+
+            var csFiles = tree.Tree
+                .Where(n => n.Type == "blob"
+                            && n.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                            && !HasExcludedSegment(n.Path))
+                .Select(n => n.Path)
+                .ToList();
+
+            if (csFiles.Count == 0)
+            {
+                _repoStatus = "No .cs files found in repository.";
+                return;
+            }
+
+            if (tree.Truncated)
+            {
+                _repoStatus = "Warning: GitHub returned a truncated file tree — results may be incomplete. ";
+                StateHasChanged();
+            }
+
+            // Analyze each file
+            var analyzer = new SyntaxAnalyzer();
+            var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams);
+            var allFindings = new List<Finding>();
+            var total = csFiles.Count;
+
+            for (var i = 0; i < csFiles.Count; i++)
+            {
+                var path = csFiles[i];
+                _repoStatus = $"Analyzing {i + 1}/{total}: {path}";
+
+                if (i % 5 == 0)
+                {
+                    StateHasChanged();
+                    await Task.Yield();
+                }
+
+                var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{defaultBranch}/{path}";
+                var content = await FetchTextAsync(rawUrl);
+                if (content is null) continue; // skip files that fail to download
+
+                var metrics = analyzer.AnalyzeSource(content, path);
+                allFindings.AddRange(metrics.SelectMany(m => FindingFactory.Create(m, thresholds)));
+            }
+
+            _repoFindings = allFindings;
+            _repoStatus = allFindings.Count == 0
+                ? $"Analyzed {total} files — no findings (all within thresholds)."
+                : $"Analyzed {total} files — {allFindings.Count} finding(s).";
+        }
+        finally
+        {
+            _isAnalyzingRepo = false;
+            StateHasChanged();
+        }
+    }
+
+    private static bool TryParseRepoUrl(string url, out string owner, out string repo)
+    {
+        owner = string.Empty;
+        repo = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(url)) return false;
+
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)) return false;
+
+        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return false;
+
+        var segments = uri.AbsolutePath.Trim('/').Split('/');
+        if (segments.Length < 2) return false;
+
+        owner = segments[0];
+        repo = segments[1].TrimEnd('/');
+
+        if (repo.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+        {
+            repo = repo[..^4];
+        }
+
+        return !string.IsNullOrEmpty(owner) && !string.IsNullOrEmpty(repo);
+    }
+
+    private async Task<T?> GetJsonAsync<T>(string url) where T : class
+    {
+        using var request = BuildRequest(HttpMethod.Get, url);
+        HttpResponseMessage response;
+        try
+        {
+            response = await Http.SendAsync(request);
+        }
+        catch (Exception ex)
+        {
+            _repoStatus = $"Network error: {ex.Message}";
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _repoStatus = FormatHttpError(response);
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync();
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json);
+        }
+        catch (JsonException ex)
+        {
+            _repoStatus = $"Failed to parse GitHub response: {ex.Message}";
+            return null;
+        }
+    }
+
+    private async Task<string?> FetchTextAsync(string url)
+    {
+        using var request = BuildRequest(HttpMethod.Get, url);
+        HttpResponseMessage response;
+        try
+        {
+            response = await Http.SendAsync(request);
+        }
+        catch
+        {
+            return null;
+        }
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadAsStringAsync()
+            : null;
+    }
+
+    private HttpRequestMessage BuildRequest(HttpMethod method, string url)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Add("User-Agent", "CodeComplexityAnalyzer-Web");
+        request.Headers.Add("Accept", "application/vnd.github+json");
+
+        if (!string.IsNullOrWhiteSpace(_githubToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _githubToken.Trim());
+        }
+
+        return request;
+    }
+
+    private string FormatHttpError(HttpResponseMessage response)
+    {
+        var status = (int)response.StatusCode;
+
+        if (status == 404)
+            return "Repo not found or private.";
+
+        if (status == 403 || status == 429)
+        {
+            var remaining = response.Headers.TryGetValues("X-RateLimit-Remaining", out var vals)
+                ? vals.FirstOrDefault()
+                : null;
+
+            if (remaining == "0" || status == 429)
+            {
+                var resetEpoch = response.Headers.TryGetValues("X-RateLimit-Reset", out var resets)
+                    ? resets.FirstOrDefault()
+                    : null;
+
+                var resetTime = string.Empty;
+                if (long.TryParse(resetEpoch, out var epoch))
+                {
+                    var dt = DateTimeOffset.FromUnixTimeSeconds(epoch).ToLocalTime();
+                    resetTime = $" Resets at {dt:HH:mm:ss}.";
+                }
+
+                return $"GitHub rate limit hit. Provide a personal access token to raise the limit, or wait.{resetTime}";
+            }
+        }
+
+        return $"GitHub API error: HTTP {status}.";
+    }
+
+    // ── Shared rendering helper ───────────────────────────────────────────────
+    private RenderFragment RenderFindings(List<Finding> findings) => __builder =>
+    {
+        if (findings.Count == 0)
+        {
+            __builder.OpenElement(0, "p");
+            __builder.AddContent(1, "No findings — code is within thresholds.");
+            __builder.CloseElement();
+        }
+        else
+        {
+            __builder.OpenElement(0, "table");
+            __builder.AddAttribute(1, "class", "findings");
+
+            __builder.OpenElement(2, "thead");
+            __builder.OpenElement(3, "tr");
+            foreach (var header in new[] { "Severity", "Metric", "File", "Method", "Type", "Line", "Value", "Threshold" })
+            {
+                __builder.OpenElement(4, "th");
+                __builder.AddContent(5, header);
+                __builder.CloseElement();
+            }
+            __builder.CloseElement(); // tr
+            __builder.CloseElement(); // thead
+
+            __builder.OpenElement(6, "tbody");
+            var seq = 7;
+            foreach (var f in findings)
+            {
+                __builder.OpenElement(seq++, "tr");
+                foreach (var cell in new[] { f.Severity.ToString(), f.MetricType.ToString(), f.FilePath, f.MethodName, f.ContainingType, f.LineNumber.ToString(), f.Value.ToString(), f.Threshold.ToString() })
+                {
+                    __builder.OpenElement(seq++, "td");
+                    __builder.AddContent(seq++, cell);
+                    __builder.CloseElement();
+                }
+                __builder.CloseElement(); // tr
+            }
+            __builder.CloseElement(); // tbody
+            __builder.CloseElement(); // table
+        }
+    };
 }
