@@ -1,4 +1,5 @@
 using System.CommandLine;
+using CodeComplexityAnalyzer.Cli;
 using CodeComplexityAnalyzer.Core.Analysis;
 using CodeComplexityAnalyzer.Core.Models;
 using CodeComplexityAnalyzer.Core.Reporting;
@@ -52,7 +53,8 @@ rootCommand.SetHandler(
             Thresholds: new Thresholds(maxCc, maxLines, maxParams),
             ExcludeDirectories: ["bin", "obj", ".git", "node_modules"]);
 
-        var report = new SyntaxAnalyzer().Analyze(options);
+        var sources = FileSourceCollector.Collect(options.RootPath, options.ExcludeDirectories);
+        var report = new SyntaxAnalyzer().AnalyzeSources(sources, options.RootPath, options.Thresholds);
 
         IReporter reporter = format.ToLowerInvariant() switch
         {

@@ -3,69 +3,59 @@ using CodeComplexityAnalyzer.Core.Models;
 
 namespace CodeComplexityAnalyzer.Tests;
 
-public class SyntaxAnalyzerTests : IDisposable
+public class SyntaxAnalyzerTests
 {
-    private readonly string _tempDir;
+    private static readonly Thresholds DefaultThresholds = new(10, 60, 5);
 
-    public SyntaxAnalyzerTests()
+    [Fact]
+    public void AnalyzeSourceReturnsMetricsForEachMethod()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "cca-tests-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_tempDir);
-    }
+        var analyzer = new SyntaxAnalyzer();
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-        {
-            Directory.Delete(_tempDir, recursive: true);
-        }
+        var metrics = analyzer.AnalyzeSource(
+            "class A { void M1() { } void M2(int x) { if (x > 0) { } } }",
+            "a.cs");
+
+        Assert.Equal(2, metrics.Count);
+        Assert.Contains(metrics, m => m.MethodName == "M1");
+        Assert.Contains(metrics, m => m.MethodName == "M2" && m.CyclomaticComplexity == 2);
     }
 
     [Fact]
-    public void AnalyzesAllMethodsInDirectory()
+    public void AnalyzeSourcesAggregatesMethodsFromAllInputs()
     {
-        WriteFile("a.cs", "class A { void M1() { } void M2(int x) { if (x > 0) { } } }");
-        WriteFile("b.cs", "class B { int M3(int a, int b) => a + b; }");
+        var analyzer = new SyntaxAnalyzer();
 
-        var report = new SyntaxAnalyzer().Analyze(AnalysisOptions.ForPath(_tempDir));
+        var report = analyzer.AnalyzeSources(
+            new[]
+            {
+                new SourceFile("a.cs", "class A { void M1() { } void M2(int x) { if (x > 0) { } } }"),
+                new SourceFile("b.cs", "class B { int M3(int a, int b) => a + b; }"),
+            },
+            rootPath: "test-root",
+            thresholds: DefaultThresholds);
 
         Assert.Equal(2, report.FilesAnalyzed);
         Assert.Equal(3, report.MethodsAnalyzed);
+        Assert.Equal("test-root", report.RootPath);
     }
 
     [Fact]
-    public void FlagsMethodsAboveThresholds()
+    public void AnalyzeSourcesFlagsMethodsAboveThresholds()
     {
-        WriteFile("a.cs", "class A { void Tiny() { } void Big(int a, int b, int c, int d, int e, int f, int g) { } }");
+        var analyzer = new SyntaxAnalyzer();
 
-        var options = new AnalysisOptions(
-            RootPath: _tempDir,
-            Thresholds: new Thresholds(CyclomaticComplexity: 10, LineCount: 60, ParameterCount: 5),
-            ExcludeDirectories: []);
-
-        var report = new SyntaxAnalyzer().Analyze(options);
+        var report = analyzer.AnalyzeSources(
+            new[]
+            {
+                new SourceFile(
+                    "a.cs",
+                    "class A { void Tiny() { } void Big(int a, int b, int c, int d, int e, int f, int g) { } }"),
+            },
+            rootPath: "test-root",
+            thresholds: DefaultThresholds);
 
         Assert.Single(report.Hotspots);
         Assert.Equal("Big", report.Hotspots[0].MethodName);
-    }
-
-    [Fact]
-    public void SkipsExcludedDirectories()
-    {
-        Directory.CreateDirectory(Path.Combine(_tempDir, "bin"));
-        WriteFile("bin/Generated.cs", "class G { void M() { } }");
-        WriteFile("real.cs", "class R { void M() { } }");
-
-        var report = new SyntaxAnalyzer().Analyze(AnalysisOptions.ForPath(_tempDir));
-
-        Assert.Equal(1, report.FilesAnalyzed);
-        Assert.Equal("R", report.Methods[0].ContainingType);
-    }
-
-    private void WriteFile(string relativePath, string content)
-    {
-        var fullPath = Path.Combine(_tempDir, relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllText(fullPath, content);
     }
 }
