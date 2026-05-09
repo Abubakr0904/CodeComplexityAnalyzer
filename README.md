@@ -2,6 +2,8 @@
 
 Static code complexity analyzer for C# source. Built on Roslyn syntax APIs (no MSBuild / no semantic model required).
 
+**Live web demo:** https://abubakr0904.github.io/CodeComplexityAnalyzer/
+
 ## Run
 
 ```pwsh
