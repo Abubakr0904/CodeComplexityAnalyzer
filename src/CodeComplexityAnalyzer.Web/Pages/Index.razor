@@ -14,8 +14,8 @@
 <h1>Code Complexity Analyzer</h1>
 
 <div class="theme-toggle">
-    <label>Theme:</label>
-    <select @bind="_theme" @bind:after="OnThemeChange">
+    <label for="themeSelect">Theme:</label>
+    <select id="themeSelect" @bind="_theme" @bind:after="OnThemeChange">
         <option value="system">System</option>
         <option value="light">Light</option>
         <option value="dark">Dark</option>
@@ -167,7 +167,11 @@
     {
         if (firstRender)
         {
-            try { _theme = await JS.InvokeAsync<string>("ccaTheme.get") ?? "system"; }
+            try
+            {
+                await JS.InvokeVoidAsync("ccaTheme.init");
+                _theme = await JS.InvokeAsync<string>("ccaTheme.get") ?? "system";
+            }
             catch { _theme = "system"; }
             StateHasChanged();
             await LoadHistoryAsync();

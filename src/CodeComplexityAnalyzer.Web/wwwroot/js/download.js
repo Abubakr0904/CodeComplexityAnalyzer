@@ -146,7 +146,12 @@ window.ccaTheme = (() => {
             const effective = apply(saved);
             mediaQuery.addEventListener('change', () => {
                 const current = localStorage.getItem(KEY) || 'system';
-                if (current === 'system') apply('system');
+                if (current === 'system') {
+                    const newEffective = apply('system');
+                    if (typeof monaco !== 'undefined' && monaco.editor && monaco.editor.setTheme) {
+                        monaco.editor.setTheme(newEffective === 'dark' ? 'vs-dark' : 'vs');
+                    }
+                }
             });
             return { setting: saved, effective };
         },
