@@ -15,8 +15,8 @@ reviews:
       - main
 
   path_filters:
-    - "!bin/**"
-    - "!obj/**"
+    - "!**/bin/**"
+    - "!**/obj/**"
     - "!**/*.Designer.cs"
     - "!samples/**"
 
