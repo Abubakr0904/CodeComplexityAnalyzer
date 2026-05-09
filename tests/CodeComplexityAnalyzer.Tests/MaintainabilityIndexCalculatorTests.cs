@@ -41,7 +41,7 @@ public class MaintainabilityIndexCalculatorTests
     {
         // Very simple method — raw value exceeds 100, must be clamped
         var mi = MaintainabilityIndexCalculator.Calculate(cyclomaticComplexity: 1, lineCount: 2);
-        Assert.True(mi <= 100, $"MI {mi} exceeded 100");
+        Assert.Equal(100, mi);
     }
 
     [Fact]

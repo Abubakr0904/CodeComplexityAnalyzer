@@ -64,6 +64,13 @@ public static class Runner
                     return;
                 }
 
+                if (minMi is < 0 or > 100)
+                {
+                    errWriter.WriteLine($"--min-mi must be between 0 and 100 (got {minMi}).");
+                    exitCode = 2;
+                    return;
+                }
+
                 var options = new AnalysisOptions(
                     RootPath: path,
                     Thresholds: new Thresholds(maxCc, maxLines, maxParams, minMi),
