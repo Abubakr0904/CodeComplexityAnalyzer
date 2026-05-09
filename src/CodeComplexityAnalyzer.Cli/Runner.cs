@@ -19,7 +19,7 @@ public static class Runner
         var formatOption = new Option<string>(
             name: "--format",
             getDefaultValue: () => "console",
-            description: "Output format: console or json.");
+            description: "Output format: console, json, or sarif.");
         formatOption.AddAlias("-f");
 
         var maxCcOption = new Option<int>(
@@ -69,6 +69,7 @@ public static class Runner
                 IReporter reporter = format.ToLowerInvariant() switch
                 {
                     "json" => new JsonReporter(options.Thresholds),
+                    "sarif" => new SarifReporter(options.Thresholds),
                     "console" => new ConsoleReporter(),
                     _ => throw new ArgumentException($"Unknown format: {format}"),
                 };
