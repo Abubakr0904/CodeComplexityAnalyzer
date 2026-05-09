@@ -49,3 +49,55 @@ window.ccaStorage = {
         return out;
     };
 })();
+
+window.ccaMonaco = (() => {
+    const editors = new Map(); // elementId -> monaco editor instance
+    let monacoReady = null;
+
+    function ensureMonaco() {
+        if (monacoReady) return monacoReady;
+        monacoReady = new Promise((resolve) => {
+            require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+            require(['vs/editor/editor.main'], () => resolve());
+        });
+        return monacoReady;
+    }
+
+    return {
+        async create(elementId, initialValue, dotnetRef) {
+            await ensureMonaco();
+            const el = document.getElementById(elementId);
+            if (!el) return false;
+            const editor = monaco.editor.create(el, {
+                value: initialValue || '',
+                language: 'csharp',
+                theme: 'vs',
+                automaticLayout: true,
+                minimap: { enabled: false },
+                fontSize: 14,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                tabSize: 4,
+                wordWrap: 'off'
+            });
+            editor.onDidChangeModelContent(() => {
+                dotnetRef.invokeMethodAsync('OnEditorContentChanged', editor.getValue());
+            });
+            editors.set(elementId, editor);
+            return true;
+        },
+        setValue(elementId, value) {
+            const ed = editors.get(elementId);
+            if (ed && ed.getValue() !== value) {
+                ed.setValue(value || '');
+            }
+        },
+        dispose(elementId) {
+            const ed = editors.get(elementId);
+            if (ed) {
+                ed.dispose();
+                editors.delete(elementId);
+            }
+        }
+    };
+})();
