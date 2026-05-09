@@ -98,6 +98,22 @@ window.ccaMonaco = (() => {
                 ed.dispose();
                 editors.delete(elementId);
             }
+        },
+        revealLine(elementId, lineNumber) {
+            const ed = editors.get(elementId);
+            if (!ed) return false;
+            ed.revealLineInCenter(lineNumber);
+            ed.setPosition({ lineNumber: lineNumber, column: 1 });
+            ed.focus();
+            const decoration = ed.createDecorationsCollection([{
+                range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+                options: {
+                    isWholeLine: true,
+                    className: 'cca-highlighted-line',
+                }
+            }]);
+            setTimeout(() => decoration.clear(), 2000);
+            return true;
         }
     };
 })();

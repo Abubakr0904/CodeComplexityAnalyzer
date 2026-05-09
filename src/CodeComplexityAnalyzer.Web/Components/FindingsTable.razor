@@ -108,7 +108,11 @@ else
                                     <tr class="@(f.Severity == Severity.Error ? "row-error" : "row-warning")">
                                         <td><span class="badge @(f.Severity == Severity.Error ? "badge-error" : "badge-warning")">@f.Severity</span></td>
                                         <td>@f.MetricType</td>
-                                        <td>@f.MethodName</td>
+                                        <td>
+                                            <button type="button" class="finding-link" @onclick="() => OnFindingClick.InvokeAsync(f)">
+                                                @f.MethodName
+                                            </button>
+                                        </td>
                                         <td>@f.ContainingType</td>
                                         <td>@f.LineNumber</td>
                                         <td>@f.Value</td>
@@ -130,6 +134,9 @@ else
 
     [Parameter]
     public IReadOnlyList<Finding>? Findings { get; set; }
+
+    [Parameter]
+    public EventCallback<Finding> OnFindingClick { get; set; }
 
     private HashSet<string> _expanded = new();
     private SeverityFilter _severityFilter = SeverityFilter.Both;
