@@ -69,7 +69,7 @@
      @ondragleave="OnDragLeave"
      @ondrop="OnDrop"
      @ondrop:preventDefault="true">
-    <textarea rows="20" cols="100" @bind="_sourceCode" placeholder="Paste C# source here, or drop .cs files onto this box..." />
+    <div id="@_editorId" class="monaco-host"></div>
     <div class="drop-hint">Drop .cs files here</div>
 </div>
 
@@ -143,7 +143,24 @@
         if (firstRender)
         {
             await LoadHistoryAsync();
+            _selfRef = DotNetObjectReference.Create(this);
+            var ok = await JS.InvokeAsync<bool>("ccaMonaco.create", _editorId, _sourceCode, _selfRef);
+            _editorInitialized = ok;
         }
+        else if (_editorInitialized && _sourceCode != _lastEditorValue)
+        {
+            // Push external changes (drag-drop, history restore) into Monaco
+            await JS.InvokeVoidAsync("ccaMonaco.setValue", _editorId, _sourceCode);
+            _lastEditorValue = _sourceCode;
+        }
+    }
+
+    [JSInvokable]
+    public void OnEditorContentChanged(string value)
+    {
+        _sourceCode = value;
+        _lastEditorValue = value;
+        StateHasChanged();
     }
 
     private async Task LoadHistoryAsync()
@@ -234,6 +251,10 @@
 
     // ── Paste mode ────────────────────────────────────────────────────────────
     private string _sourceCode = string.Empty;
+    private readonly string _editorId = "cca-editor-" + Guid.NewGuid().ToString("N");
+    private DotNetObjectReference<Index>? _selfRef;
+    private bool _editorInitialized = false;
+    private string _lastEditorValue = string.Empty;
     private bool _isDragging = false;
 
     private void OnDragEnter(DragEventArgs e) => _isDragging = true;
@@ -459,6 +480,12 @@
     {
         _repoCts?.Cancel();
         _repoCts?.Dispose();
+        _selfRef?.Dispose();
+        if (_editorInitialized)
+        {
+            // Best-effort dispose — fire-and-forget since Dispose is sync
+            _ = JS.InvokeVoidAsync("ccaMonaco.dispose", _editorId);
+        }
     }
 
     private static bool TryParseRepoUrl(string url, out string owner, out string repo)
