@@ -9,3 +9,16 @@ window.ccaDownload = (filename, content, mimeType) => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 };
+
+window.ccaStorage = {
+    get: (key) => {
+        const raw = localStorage.getItem(key);
+        return raw ?? null;
+    },
+    set: (key, value) => {
+        localStorage.setItem(key, value);
+    },
+    remove: (key) => {
+        localStorage.removeItem(key);
+    }
+};

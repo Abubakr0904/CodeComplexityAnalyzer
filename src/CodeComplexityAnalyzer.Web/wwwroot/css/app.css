@@ -214,6 +214,25 @@ h1:focus {
     background-color: white;
 }
 
+/* ── History panel ───────────────────────────────────────────────────────── */
+.history-panel-container { position: relative; display: inline-block; margin: 0.5rem 0; }
+.history-toggle { padding: 0.35rem 0.85rem; background: white; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+.history-toggle:hover:not(:disabled) { background: #f3f4f6; }
+.history-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.history-panel { position: absolute; top: 110%; left: 0; min-width: 360px; max-width: 520px; max-height: 400px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 0.5rem; z-index: 10; }
+.history-header { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0.5rem; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; margin-bottom: 0.25rem; }
+.history-clear { background: none; border: 1px solid #d1d5db; border-radius: 4px; padding: 0.15rem 0.5rem; font-size: 0.85em; cursor: pointer; }
+.history-clear:hover { background: #fee2e2; }
+.history-empty { padding: 0.6rem 0.5rem; color: #6b7280; font-style: italic; }
+.history-list { list-style: none; padding: 0; margin: 0; }
+.history-list li { padding: 0; }
+.history-item { display: grid; grid-template-columns: 5em 1fr auto; gap: 0.5rem; align-items: center; width: 100%; padding: 0.5rem; background: none; border: none; text-align: left; cursor: pointer; border-radius: 4px; }
+.history-item:hover { background: #f3f4f6; }
+.history-mode { font-size: 0.8em; padding: 0.1em 0.4em; background: #e5e7eb; border-radius: 3px; text-align: center; }
+.history-source { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-counts { display: flex; gap: 0.25rem; }
+.history-time { grid-column: 1 / -1; font-size: 0.78em; color: #6b7280; padding-top: 0.1rem; }
+
 /* ── CSV download button ─────────────────────────────────────────────────── */
 .csv-download-btn {
     margin: 0.5rem 0;
