@@ -77,7 +77,7 @@
     <button @onclick="Analyze" disabled="@_isAnalyzing">Analyze</button>
 </div>
 
-<FindingsTable Findings="_findings" />
+<FindingsTable Findings="_findings" OnFindingClick="HandleFindingClickPaste" />
 
 <hr />
 
@@ -122,7 +122,7 @@
     <p class="repo-status">@_repoStatus</p>
 }
 
-<FindingsTable Findings="_repoFindings" />
+<FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" />
 
 @code {
     // ── History ───────────────────────────────────────────────────────────────
@@ -475,6 +475,22 @@
     }
 
     private void CancelRepoAnalysis() => _repoCts?.Cancel();
+
+    // ── Click-to-jump ─────────────────────────────────────────────────────────
+    private async Task HandleFindingClickPaste(Finding f)
+    {
+        if (!_editorInitialized) return;
+        await JS.InvokeVoidAsync("ccaMonaco.revealLine", _editorId, f.LineNumber);
+    }
+
+    private async Task HandleFindingClickRepo(Finding f)
+    {
+        if (!TryParseRepoUrl(_repoUrl, out var owner, out var repo)) return;
+        var branch = string.IsNullOrWhiteSpace(_repoBranch) ? "main" : _repoBranch.Trim();
+        var escapedPath = string.Join("/", f.FilePath.Split('/', '\\').Select(Uri.EscapeDataString));
+        var url = $"https://github.com/{owner}/{repo}/blob/{Uri.EscapeDataString(branch)}/{escapedPath}#L{f.LineNumber}";
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
 
     public void Dispose()
     {
