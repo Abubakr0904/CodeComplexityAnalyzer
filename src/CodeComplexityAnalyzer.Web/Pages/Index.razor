@@ -114,14 +114,21 @@ else
         [property: JsonPropertyName("default_branch")] string DefaultBranch);
 
     private sealed record GitHubTreeResponse(
-        [property: JsonPropertyName("tree")] List<GitHubTreeNode> Tree);
+        [property: JsonPropertyName("tree")] List<GitHubTreeNode> Tree,
+        [property: JsonPropertyName("truncated")] bool Truncated = false);
 
     private sealed record GitHubTreeNode(
         [property: JsonPropertyName("path")] string Path,
         [property: JsonPropertyName("type")] string Type);
 
-    private static readonly HashSet<string> ExcludedPrefixes =
-        new(StringComparer.OrdinalIgnoreCase) { "bin/", "obj/", "node_modules/" };
+    private static readonly HashSet<string> ExcludedDirNames =
+        new(StringComparer.OrdinalIgnoreCase) { "bin", "obj", "node_modules" };
+
+    private static bool HasExcludedSegment(string path)
+    {
+        var segments = path.Split('/', '\\');
+        return segments.Any(ExcludedDirNames.Contains);
+    }
 
     private async Task AnalyzeRepo()
     {
@@ -160,7 +167,7 @@ else
             var csFiles = tree.Tree
                 .Where(n => n.Type == "blob"
                             && n.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                            && !ExcludedPrefixes.Any(p => n.Path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+                            && !HasExcludedSegment(n.Path))
                 .Select(n => n.Path)
                 .ToList();
 
@@ -168,6 +175,12 @@ else
             {
                 _repoStatus = "No .cs files found in repository.";
                 return;
+            }
+
+            if (tree.Truncated)
+            {
+                _repoStatus = "Warning: GitHub returned a truncated file tree — results may be incomplete. ";
+                StateHasChanged();
             }
 
             // Analyze each file
@@ -224,6 +237,11 @@ else
         owner = segments[0];
         repo = segments[1].TrimEnd('/');
 
+        if (repo.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+        {
+            repo = repo[..^4];
+        }
+
         return !string.IsNullOrEmpty(owner) && !string.IsNullOrEmpty(repo);
     }
 
@@ -248,7 +266,15 @@ else
         }
 
         var json = await response.Content.ReadAsStringAsync();
-        return JsonSerializer.Deserialize<T>(json);
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json);
+        }
+        catch (JsonException ex)
+        {
+            _repoStatus = $"Failed to parse GitHub response: {ex.Message}";
+            return null;
+        }
     }
 
     private async Task<string?> FetchTextAsync(string url)
