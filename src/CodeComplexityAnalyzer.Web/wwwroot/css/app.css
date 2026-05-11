@@ -593,9 +593,15 @@ main {
     padding: 0.28rem 0.55rem;
 }
 
-/* ── CSV download ─────────────────────────────────────────────────────────── */
+/* ── CSV / JSON / SARIF download ──────────────────────────────────────────── */
 .csv-download-btn {
     margin: var(--space-2) 0;
+}
+
+.findings-controls .export-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 /* ── Drag & drop ──────────────────────────────────────────────────────────── */
