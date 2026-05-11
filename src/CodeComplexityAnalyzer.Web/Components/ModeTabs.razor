@@ -1,0 +1,25 @@
+<div class="mode-tabs" role="tablist">
+    <button type="button"
+            role="tab"
+            class="mode-tab @(Active == "paste" ? "active" : "")"
+            aria-selected="@(Active == "paste")"
+            @onclick='() => Select("paste")'>
+        <Icon Name="code" Size="14" />
+        <span>Paste code</span>
+    </button>
+    <button type="button"
+            role="tab"
+            class="mode-tab @(Active == "github" ? "active" : "")"
+            aria-selected="@(Active == "github")"
+            @onclick='() => Select("github")'>
+        <Icon Name="github" Size="14" />
+        <span>GitHub repo</span>
+    </button>
+</div>
+
+@code {
+    [Parameter] public string Active { get; set; } = "paste";
+    [Parameter] public EventCallback<string> ActiveChanged { get; set; }
+
+    private Task Select(string mode) => ActiveChanged.InvokeAsync(mode);
+}

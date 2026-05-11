@@ -1,0 +1,74 @@
+@implements IDisposable
+
+<div class="history-wrap">
+    <button type="button" class="history-trigger"
+            @onclick="Toggle"
+            disabled="@(History.Count == 0)"
+            aria-haspopup="true"
+            aria-expanded="@_open.ToString().ToLower()">
+        <Icon Name="history" Size="14" />
+        <span>History</span>
+        @if (History.Count > 0)
+        {
+            <span class="history-count-pill">@History.Count</span>
+        }
+    </button>
+
+    @if (_open && History.Count > 0)
+    {
+        <div class="history-panel" role="menu">
+            <div class="history-header">
+                <span>Recent analyses</span>
+                <button type="button" class="btn btn-sm btn-danger" @onclick="HandleClear">
+                    <Icon Name="trash" Size="13" />
+                    Clear all
+                </button>
+            </div>
+
+            <ul class="history-list">
+                @foreach (var entry in History)
+                {
+                    <li @key="entry.Id">
+                        <button type="button" class="history-item" @onclick="() => HandleRestore(entry)">
+                            <span class="history-mode-tag @(entry.Mode == "github" ? "mode-github" : "mode-paste")">
+                                @if (entry.Mode == "github") { <Icon Name="github" Size="11" /> } else { <Icon Name="code" Size="11" /> }
+                                @entry.Mode
+                            </span>
+                            <span class="history-source" title="@entry.SourceId">@entry.SourceId</span>
+                            <span class="history-counts">
+                                @if (entry.ErrorCount > 0) { <span class="badge badge-error">@entry.ErrorCount</span> }
+                                @if (entry.WarningCount > 0) { <span class="badge badge-warning">@entry.WarningCount</span> }
+                                @if (entry.ErrorCount == 0 && entry.WarningCount == 0) { <span class="badge badge-clean">clean</span> }
+                            </span>
+                            <span class="history-time">@entry.TimestampUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<HistoryEntry> History { get; set; } = Array.Empty<HistoryEntry>();
+    [Parameter] public EventCallback<HistoryEntry> OnRestore { get; set; }
+    [Parameter] public EventCallback OnClear { get; set; }
+
+    private bool _open;
+
+    private void Toggle() => _open = !_open;
+
+    private async Task HandleRestore(HistoryEntry entry)
+    {
+        _open = false;
+        await OnRestore.InvokeAsync(entry);
+    }
+
+    private async Task HandleClear()
+    {
+        _open = false;
+        await OnClear.InvokeAsync();
+    }
+
+    public void Dispose() { }
+}

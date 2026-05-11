@@ -1,0 +1,62 @@
+<div class="thresholds-card">
+    <div class="thresholds-header">
+        <span class="thresholds-title">Thresholds</span>
+        <button type="button" class="btn btn-ghost btn-sm" @onclick="ResetDefaults">Reset</button>
+    </div>
+    <div class="thresholds-grid">
+        <label class="threshold-field">
+            <span class="threshold-label">Cyclomatic complexity</span>
+            <input type="number" min="1" value="@MaxCc" @oninput="OnCcChanged" />
+            <span class="threshold-hint">Flag methods with CC over this</span>
+        </label>
+        <label class="threshold-field">
+            <span class="threshold-label">Method line count</span>
+            <input type="number" min="1" value="@MaxLines" @oninput="OnLinesChanged" />
+            <span class="threshold-hint">Maximum body lines</span>
+        </label>
+        <label class="threshold-field">
+            <span class="threshold-label">Parameter count</span>
+            <input type="number" min="0" value="@MaxParams" @oninput="OnParamsChanged" />
+            <span class="threshold-hint">Maximum parameters</span>
+        </label>
+        <label class="threshold-field">
+            <span class="threshold-label">Min maintainability index</span>
+            <input type="number" min="0" max="100" value="@MinMi" @oninput="OnMiChanged" />
+            <span class="threshold-hint">Flag below this (0–100)</span>
+        </label>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int MaxCc { get; set; } = 10;
+    [Parameter] public EventCallback<int> MaxCcChanged { get; set; }
+
+    [Parameter] public int MaxLines { get; set; } = 60;
+    [Parameter] public EventCallback<int> MaxLinesChanged { get; set; }
+
+    [Parameter] public int MaxParams { get; set; } = 5;
+    [Parameter] public EventCallback<int> MaxParamsChanged { get; set; }
+
+    [Parameter] public int MinMi { get; set; } = 50;
+    [Parameter] public EventCallback<int> MinMiChanged { get; set; }
+
+    private Task OnCcChanged(ChangeEventArgs e) =>
+        MaxCcChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v >= 1 ? v : MaxCc);
+
+    private Task OnLinesChanged(ChangeEventArgs e) =>
+        MaxLinesChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v >= 1 ? v : MaxLines);
+
+    private Task OnParamsChanged(ChangeEventArgs e) =>
+        MaxParamsChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v >= 0 ? v : MaxParams);
+
+    private Task OnMiChanged(ChangeEventArgs e) =>
+        MinMiChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v is >= 0 and <= 100 ? v : MinMi);
+
+    private async Task ResetDefaults()
+    {
+        await MaxCcChanged.InvokeAsync(10);
+        await MaxLinesChanged.InvokeAsync(60);
+        await MaxParamsChanged.InvokeAsync(5);
+        await MinMiChanged.InvokeAsync(50);
+    }
+}

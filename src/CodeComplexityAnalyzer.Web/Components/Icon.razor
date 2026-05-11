@@ -1,0 +1,87 @@
+@* Lightweight inline SVG icon. Pass Name to pick which glyph; defaults to 1em sizing. *@
+
+@switch (Name)
+{
+    case "logo":
+        <svg viewBox="0 0 32 32" width="@Size" height="@Size" fill="none" aria-hidden="true" class="@Class">
+            <defs>
+                <linearGradient id="ccaLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stop-color="#818cf8" />
+                    <stop offset="1" stop-color="#6366f1" />
+                </linearGradient>
+            </defs>
+            <rect x="1.5" y="1.5" width="29" height="29" rx="7.5" fill="url(#ccaLogoGrad)" />
+            <path d="M11 11.5L8 16l3 4.5M21 11.5l3 4.5-3 4.5M18.2 9l-4.4 14" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        break;
+
+    case "history":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="@Class">
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 4v5h5" />
+            <path d="M12 7v5l3 2" />
+        </svg>
+        break;
+
+    case "sun":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="@Class">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+        break;
+
+    case "moon":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="@Class">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+        break;
+
+    case "monitor":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="@Class">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <path d="M8 21h8M12 17v4" />
+        </svg>
+        break;
+
+    case "github":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="currentColor" aria-hidden="true" class="@Class">
+            <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.25 3.34.95.1-.74.4-1.25.73-1.54-2.55-.29-5.24-1.27-5.24-5.67 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.17a11 11 0 0 1 5.78 0c2.2-1.48 3.17-1.17 3.17-1.17.63 1.58.23 2.75.12 3.04.74.8 1.18 1.82 1.18 3.07 0 4.41-2.69 5.38-5.25 5.66.41.36.77 1.07.77 2.16v3.21c0 .31.21.67.8.56 4.56-1.52 7.85-5.83 7.85-10.91C23.5 5.65 18.35.5 12 .5z" />
+        </svg>
+        break;
+
+    case "code":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="@Class">
+            <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+        </svg>
+        break;
+
+    case "play":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="currentColor" aria-hidden="true" class="@Class">
+            <path d="M7 4.5v15a1 1 0 0 0 1.55.83l12-7.5a1 1 0 0 0 0-1.66l-12-7.5A1 1 0 0 0 7 4.5z" />
+        </svg>
+        break;
+
+    case "stop":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="currentColor" aria-hidden="true" class="@Class">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+        </svg>
+        break;
+
+    case "download":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="@Class">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+        </svg>
+        break;
+
+    case "trash":
+        <svg viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="@Class">
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        </svg>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+    [Parameter] public string Size { get; set; } = "1em";
+    [Parameter] public string Class { get; set; } = string.Empty;
+}
