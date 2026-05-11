@@ -68,7 +68,10 @@
             </label>
         </div>
 
-        <FindingsTable Findings="_findings" OnFindingClick="HandleFindingClickPaste" />
+        <FindingsTable Findings="_findings"
+                       OnFindingClick="HandleFindingClickPaste"
+                       OnExport="HandleExportPaste"
+                       CanExport="@(_pasteReport is not null)" />
     </div>
 
     <div class="card" hidden="@(_activeMode != "github")">
@@ -133,7 +136,10 @@
         <p class="repo-status" role="status" aria-live="polite"
            hidden="@string.IsNullOrEmpty(repoStatusText)">@repoStatusText</p>
 
-        <FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" />
+        <FindingsTable Findings="_repoFindings"
+                       OnFindingClick="HandleFindingClickRepo"
+                       OnExport="HandleExportRepo"
+                       CanExport="@(_repoReport is not null)" />
     </div>
 </div>
 
@@ -476,6 +482,7 @@ public class OrderProcessor
     private int _maxParams = 5;
     private int _minMi = 50;
     private List<Finding>? _findings;
+    private AnalysisReport? _pasteReport;
     private bool _isAnalyzing;
 
     private async Task Analyze() => await AnalyzeCore(recordHistory: true);
@@ -489,7 +496,15 @@ public class OrderProcessor
         {
             var analyzer = new SyntaxAnalyzer();
             var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
-            var metrics = analyzer.AnalyzeSource(_sourceCode ?? string.Empty, "input.cs");
+            var metrics = analyzer.AnalyzeSource(_sourceCode ?? string.Empty, "input.cs").ToList();
+
+            var hotspots = metrics.Where(m => FindingFactory.Create(m, thresholds).Any()).ToList();
+            _pasteReport = new AnalysisReport(
+                RootPath: "input.cs",
+                FilesAnalyzed: 1,
+                MethodsAnalyzed: metrics.Count,
+                Methods: metrics,
+                Hotspots: hotspots);
 
             _findings = metrics
                 .SelectMany(m => FindingFactory.Create(m, thresholds))
@@ -507,11 +522,15 @@ public class OrderProcessor
         }
     }
 
+    private Task HandleExportPaste(string format) =>
+        DownloadReport(_pasteReport, format, "paste");
+
     // ── GitHub repo mode ──────────────────────────────────────────────────────
     private string _repoUrl = string.Empty;
     private string _githubToken = string.Empty;
     private string _repoBranch = string.Empty;
     private List<Finding>? _repoFindings;
+    private AnalysisReport? _repoReport;
     private RepoAnalysisState _repoState = new RepoAnalysisState.Idle();
     private CancellationTokenSource? _repoCts;
 
@@ -621,6 +640,7 @@ public class OrderProcessor
         var analyzer = new SyntaxAnalyzer();
         var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
         var allFindings = new List<Finding>();
+        var allMethods = new List<MethodMetrics>();
         var failedDownloads = 0;
         var total = csFiles.Count;
 
@@ -656,11 +676,19 @@ public class OrderProcessor
                 continue;
             }
 
-            var metrics = analyzer.AnalyzeSource(content, path);
+            var metrics = analyzer.AnalyzeSource(content, path).ToList();
+            allMethods.AddRange(metrics);
             allFindings.AddRange(metrics.SelectMany(m => FindingFactory.Create(m, thresholds)));
         }
 
         _repoFindings = allFindings;
+        var hotspots = allMethods.Where(m => FindingFactory.Create(m, thresholds).Any()).ToList();
+        _repoReport = new AnalysisReport(
+            RootPath: $"{owner}/{repo}",
+            FilesAnalyzed: total - failedDownloads,
+            MethodsAnalyzed: allMethods.Count,
+            Methods: allMethods,
+            Hotspots: hotspots);
         _repoState = new RepoAnalysisState.Completed(
             Branch: branch,
             Analyzed: total - failedDownloads,
@@ -671,6 +699,39 @@ public class OrderProcessor
     }
 
     private void CancelRepoAnalysis() => _repoCts?.Cancel();
+
+    private Task HandleExportRepo(string format) =>
+        DownloadReport(_repoReport, format, "repo");
+
+    private async Task DownloadReport(AnalysisReport? report, string format, string sourceTag)
+    {
+        if (report is null) return;
+
+        var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
+        using var sw = new StringWriter();
+        string mime;
+        string ext;
+
+        switch (format)
+        {
+            case "json":
+                new JsonReporter(thresholds).Render(report, sw);
+                mime = "application/json";
+                ext = "json";
+                break;
+            case "sarif":
+                new SarifReporter(thresholds).Render(report, sw);
+                mime = "application/sarif+json";
+                ext = "sarif";
+                break;
+            default:
+                return;
+        }
+
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var filename = $"cca-{sourceTag}-{stamp}.{ext}";
+        await JS.InvokeVoidAsync("ccaDownload", filename, sw.ToString(), mime);
+    }
 
     // ── Click-to-jump ─────────────────────────────────────────────────────────
     private async Task HandleFindingClickPaste(Finding f)

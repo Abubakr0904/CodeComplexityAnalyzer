@@ -74,13 +74,30 @@ else
                 </select>
             </div>
 
-            <button type="button" class="btn btn-sm"
-                    @onclick="DownloadCsv"
-                    style="margin-left:auto"
-                    disabled="@(Findings is null || Findings!.Count == 0)">
-                <Icon Name="download" Size="13" />
-                CSV
-            </button>
+            <div class="export-group" style="margin-left:auto">
+                <span class="control-label">Export</span>
+                <button type="button" class="btn btn-sm"
+                        @onclick="DownloadCsv"
+                        disabled="@(Findings is null || Findings!.Count == 0)">
+                    <Icon Name="download" Size="13" />
+                    CSV
+                </button>
+                @if (OnExport.HasDelegate && CanExport)
+                {
+                    <button type="button" class="btn btn-sm"
+                            @onclick='() => OnExport.InvokeAsync("json")'
+                            disabled="@(Findings is null || Findings!.Count == 0)">
+                        <Icon Name="download" Size="13" />
+                        JSON
+                    </button>
+                    <button type="button" class="btn btn-sm"
+                            @onclick='() => OnExport.InvokeAsync("sarif")'
+                            disabled="@(Findings is null || Findings!.Count == 0)">
+                        <Icon Name="download" Size="13" />
+                        SARIF
+                    </button>
+                }
+            </div>
         </div>
 
         @if (filtered.Count == 0)
@@ -160,6 +177,17 @@ else
 
     [Parameter]
     public EventCallback<Finding> OnFindingClick { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnExport { get; set; }
+
+    /// <summary>
+    /// Whether the host has a backing AnalysisReport available for JSON/SARIF
+    /// export. When false, the JSON/SARIF buttons are hidden so users don't
+    /// click no-ops; CSV remains available because it's built inline.
+    /// </summary>
+    [Parameter]
+    public bool CanExport { get; set; }
 
     private HashSet<string> _expanded = new();
     private SeverityFilter _severityFilter = SeverityFilter.Both;
