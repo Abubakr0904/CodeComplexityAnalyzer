@@ -193,3 +193,47 @@ window.ccaTheme = (() => {
         }
     };
 })();
+
+// Keyboard shortcuts bridge. Index.razor registers a DotNetObjectReference and
+// we forward Ctrl/Cmd+Enter (analyze), Esc (cancel repo), and Ctrl/Cmd+Shift+L
+// (toggle theme) to its [JSInvokable] methods. Returns the platform's modifier
+// label so the UI can render the correct hint.
+window.ccaShortcuts = (() => {
+    let dotnetRef = null;
+    let attached = false;
+    const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || '');
+
+    function handler(e) {
+        if (!dotnetRef) return;
+        const mod = isMac ? e.metaKey : e.ctrlKey;
+        if (mod && e.key === 'Enter') {
+            e.preventDefault();
+            dotnetRef.invokeMethodAsync('OnShortcutAnalyze');
+        } else if (e.key === 'Escape') {
+            dotnetRef.invokeMethodAsync('OnShortcutCancel');
+        } else if (mod && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+            e.preventDefault();
+            dotnetRef.invokeMethodAsync('OnShortcutToggleTheme');
+        }
+    }
+
+    return {
+        attach(ref) {
+            dotnetRef = ref;
+            if (!attached) {
+                document.addEventListener('keydown', handler);
+                attached = true;
+            }
+        },
+        detach() {
+            if (attached) {
+                document.removeEventListener('keydown', handler);
+                attached = false;
+            }
+            dotnetRef = null;
+        },
+        modLabel() {
+            return isMac ? '⌘' : 'Ctrl';
+        }
+    };
+})();

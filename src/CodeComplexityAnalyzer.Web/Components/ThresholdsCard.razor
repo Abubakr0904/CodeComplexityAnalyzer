@@ -41,16 +41,24 @@
     [Parameter] public EventCallback<int> MinMiChanged { get; set; }
 
     private Task OnCcChanged(ChangeEventArgs e) =>
-        MaxCcChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v >= 1 ? v : MaxCc);
+        int.TryParse(e.Value?.ToString(), out var v) && v >= 1
+            ? MaxCcChanged.InvokeAsync(v)
+            : Task.CompletedTask;
 
     private Task OnLinesChanged(ChangeEventArgs e) =>
-        MaxLinesChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v >= 1 ? v : MaxLines);
+        int.TryParse(e.Value?.ToString(), out var v) && v >= 1
+            ? MaxLinesChanged.InvokeAsync(v)
+            : Task.CompletedTask;
 
     private Task OnParamsChanged(ChangeEventArgs e) =>
-        MaxParamsChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v >= 0 ? v : MaxParams);
+        int.TryParse(e.Value?.ToString(), out var v) && v >= 0
+            ? MaxParamsChanged.InvokeAsync(v)
+            : Task.CompletedTask;
 
     private Task OnMiChanged(ChangeEventArgs e) =>
-        MinMiChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var v) && v is >= 0 and <= 100 ? v : MinMi);
+        int.TryParse(e.Value?.ToString(), out var v) && v is >= 0 and <= 100
+            ? MinMiChanged.InvokeAsync(v)
+            : Task.CompletedTask;
 
     private async Task ResetDefaults()
     {
