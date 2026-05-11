@@ -75,8 +75,15 @@ async function staleWhileRevalidate(request) {
             cache.put(request, response.clone()).catch(() => { /* ignore */ });
         }
         return response;
-    }).catch(() => undefined);
-    return cached || networkFetch || fetch(request);
+    });
+    // If cached: serve immediately and let networkFetch update cache in the
+    // background. Otherwise await the network — if that also fails the rejection
+    // propagates naturally so respondWith() surfaces a real error.
+    if (cached) {
+        networkFetch.catch(() => { /* swallow background update failure */ });
+        return cached;
+    }
+    return await networkFetch;
 }
 
 self.addEventListener('fetch', (event) => {

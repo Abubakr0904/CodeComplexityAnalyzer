@@ -59,7 +59,12 @@ window.ccaMonaco = (() => {
     // Inject Monaco's AMD loader on demand. Removed from <head> so it no longer
     // blocks the initial page paint or competes with Blazor's WASM download.
     function loadLoaderScript() {
-        if (typeof require !== 'undefined') return Promise.resolve();
+        // `typeof require` alone is not sufficient — pages might embed
+        // RequireJS or another AMD loader. Skip injection only if Monaco's
+        // loader appears present (Monaco's loader exposes require.config as a
+        // function) or if monaco itself is already on the global.
+        if (typeof window.monaco !== 'undefined') return Promise.resolve();
+        if (typeof require !== 'undefined' && typeof require.config === 'function') return Promise.resolve();
         if (loaderReady) return loaderReady;
         loaderReady = new Promise((resolve, reject) => {
             const script = document.createElement('script');
