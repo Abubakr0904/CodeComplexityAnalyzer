@@ -52,14 +52,39 @@ window.ccaStorage = {
 
 window.ccaMonaco = (() => {
     const editors = new Map(); // elementId -> monaco editor instance
+    const MONACO_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
     let monacoReady = null;
+    let loaderReady = null;
+
+    // Inject Monaco's AMD loader on demand. Removed from <head> so it no longer
+    // blocks the initial page paint or competes with Blazor's WASM download.
+    function loadLoaderScript() {
+        // `typeof require` alone is not sufficient — pages might embed
+        // RequireJS or another AMD loader. Skip injection only if Monaco's
+        // loader appears present (Monaco's loader exposes require.config as a
+        // function) or if monaco itself is already on the global.
+        if (typeof window.monaco !== 'undefined') return Promise.resolve();
+        if (typeof require !== 'undefined' && typeof require.config === 'function') return Promise.resolve();
+        if (loaderReady) return loaderReady;
+        loaderReady = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = `${MONACO_BASE}/loader.js`;
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load Monaco loader'));
+            document.head.appendChild(script);
+        });
+        return loaderReady;
+    }
 
     function ensureMonaco() {
         if (monacoReady) return monacoReady;
-        monacoReady = new Promise((resolve) => {
-            require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-            require(['vs/editor/editor.main'], () => resolve());
-        });
+        monacoReady = loadLoaderScript().then(() =>
+            new Promise((resolve) => {
+                require.config({ paths: { 'vs': MONACO_BASE } });
+                require(['vs/editor/editor.main'], () => resolve());
+            })
+        );
         return monacoReady;
     }
 

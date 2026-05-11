@@ -137,6 +137,14 @@
     </div>
 </div>
 
+@if (_updateAvailable)
+{
+    <div class="sw-update-toast" role="status" aria-live="polite">
+        <span>New version available — reload to update.</span>
+        <button type="button" class="btn btn-primary btn-sm" @onclick="ReloadForUpdate">Reload</button>
+    </div>
+}
+
 @code {
     // ── UI state ──────────────────────────────────────────────────────────────
     private string _activeMode = "paste";
@@ -179,6 +187,11 @@
             StateHasChanged();
             await LoadHistoryAsync();
             _selfRef = DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("ccaPwa.registerUpdateHandler", _selfRef);
+            }
+            catch { /* PWA bridge optional — ignore if unavailable */ }
             var ok = await JS.InvokeAsync<bool>("ccaMonaco.create", _editorId, _sourceCode, _selfRef);
             _editorInitialized = ok;
             try
@@ -195,6 +208,22 @@
             await JS.InvokeVoidAsync("ccaMonaco.setValue", _editorId, _sourceCode);
             _lastEditorValue = _sourceCode;
         }
+    }
+
+    // ── Service worker update toast ───────────────────────────────────────────
+    private bool _updateAvailable;
+
+    [JSInvokable]
+    public Task OnSwUpdate()
+    {
+        _updateAvailable = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task ReloadForUpdate()
+    {
+        await JS.InvokeVoidAsync("location.reload");
     }
 
     [JSInvokable]
