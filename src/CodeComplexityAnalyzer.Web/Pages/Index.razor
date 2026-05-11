@@ -104,9 +104,12 @@
             </button>
         </div>
 
-        @if (!string.IsNullOrEmpty(_repoStatus))
+        @{
+            var repoStatusText = _repoState.ToStatusText();
+        }
+        @if (!string.IsNullOrEmpty(repoStatusText))
         {
-            <p class="repo-status">@_repoStatus</p>
+            <p class="repo-status">@repoStatusText</p>
         }
 
         <FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" />
@@ -359,11 +362,11 @@
     private string _repoUrl = string.Empty;
     private string _githubToken = string.Empty;
     private string _repoBranch = string.Empty;
-    private string _repoStatus = string.Empty;
     private List<Finding>? _repoFindings;
-    private bool _isAnalyzingRepo;
-    private int _failedDownloads;
+    private RepoAnalysisState _repoState = new RepoAnalysisState.Idle();
     private CancellationTokenSource? _repoCts;
+
+    private bool _isAnalyzingRepo => _repoState.IsRunning();
 
     private sealed record GitHubRepo(
         [property: JsonPropertyName("default_branch")] string DefaultBranch);
@@ -393,120 +396,129 @@
         var ct = _repoCts.Token;
 
         _repoFindings = null;
-        _repoStatus = string.Empty;
-        _failedDownloads = 0;
-        _isAnalyzingRepo = true;
+        _repoState = new RepoAnalysisState.Resolving(string.Empty);
         StateHasChanged();
 
         try
         {
             if (!TryParseRepoUrl(_repoUrl, out var owner, out var repo))
             {
-                _repoStatus = "Invalid URL. Expected: https://github.com/owner/repo";
+                _repoState = new RepoAnalysisState.Failed(
+                    "Invalid URL. Expected: https://github.com/owner/repo");
                 return;
             }
 
-            string branch;
-            if (!string.IsNullOrWhiteSpace(_repoBranch))
-            {
-                branch = _repoBranch.Trim();
-                _repoStatus = $"Analyzing branch '{branch}'...";
-                StateHasChanged();
-            }
-            else
-            {
-                _repoStatus = "Fetching repository info...";
-                StateHasChanged();
-                var repoInfo = await GetJsonAsync<GitHubRepo>(
-                    $"https://api.github.com/repos/{owner}/{repo}", ct);
-                if (repoInfo is null) return;
-                branch = repoInfo.DefaultBranch;
-                _repoBranch = branch;
-            }
+            var branch = await ResolveBranchAsync(owner, repo, ct);
+            if (branch is null) return;
 
-            _repoStatus = "Fetching file tree...";
-            StateHasChanged();
-
-            var tree = await GetJsonAsync<GitHubTreeResponse>(
-                $"https://api.github.com/repos/{owner}/{repo}/git/trees/{Uri.EscapeDataString(branch)}?recursive=1", ct);
-            if (tree is null) return;
-
-            var csFiles = tree.Tree
-                .Where(n => n.Type == "blob"
-                            && n.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                            && !HasExcludedSegment(n.Path))
-                .Select(n => n.Path)
-                .ToList();
+            var csFiles = await FetchTreeAsync(owner, repo, branch, ct);
+            if (csFiles is null) return;
 
             if (csFiles.Count == 0)
             {
-                _repoStatus = "No .cs files found in repository.";
+                _repoState = new RepoAnalysisState.Failed("No .cs files found in repository.");
                 return;
             }
 
-            if (tree.Truncated)
-            {
-                _repoStatus = "Warning: GitHub returned a truncated file tree — results may be incomplete. ";
-                StateHasChanged();
-            }
-
-            var analyzer = new SyntaxAnalyzer();
-            var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
-            var allFindings = new List<Finding>();
-            var total = csFiles.Count;
-
-            for (var i = 0; i < csFiles.Count; i++)
-            {
-                if (ct.IsCancellationRequested)
-                {
-                    _repoStatus = "Cancelled.";
-                    _repoFindings = allFindings.Count > 0 ? allFindings : null;
-                    return;
-                }
-
-                var path = csFiles[i];
-                _repoStatus = $"Analyzing {i + 1}/{total}: {path}";
-
-                if (i % 5 == 0)
-                {
-                    StateHasChanged();
-                    await Task.Yield();
-                }
-
-                var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{Uri.EscapeDataString(branch)}/{path}";
-                var content = await FetchTextAsync(rawUrl, ct);
-                if (content is null)
-                {
-                    if (ct.IsCancellationRequested)
-                    {
-                        _repoStatus = "Cancelled.";
-                        _repoFindings = allFindings.Count > 0 ? allFindings : null;
-                        return;
-                    }
-                    _failedDownloads++;
-                    continue;
-                }
-
-                var metrics = analyzer.AnalyzeSource(content, path);
-                allFindings.AddRange(metrics.SelectMany(m => FindingFactory.Create(m, thresholds)));
-            }
-
-            _repoFindings = allFindings;
-            var actualAnalyzedCount = total - _failedDownloads;
-            var failSuffix = _failedDownloads > 0
-                ? $" ({_failedDownloads} file(s) could not be downloaded)"
-                : string.Empty;
-            _repoStatus = allFindings.Count == 0
-                ? $"Analyzed {actualAnalyzedCount} files on branch '{branch}' — no findings (all within thresholds).{failSuffix}"
-                : $"Analyzed {actualAnalyzedCount} files on branch '{branch}' — {allFindings.Count} finding(s).{failSuffix}";
-
-            await RecordHistory("github", $"{owner}/{repo}@{branch}", allFindings);
+            await AnalyzeFilesAsync(owner, repo, branch, csFiles, ct);
         }
         finally
         {
-            _isAnalyzingRepo = false;
             StateHasChanged();
         }
+    }
+
+    private async Task<string?> ResolveBranchAsync(string owner, string repo, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(_repoBranch))
+        {
+            var branch = _repoBranch.Trim();
+            _repoState = new RepoAnalysisState.Fetching(branch);
+            StateHasChanged();
+            return branch;
+        }
+
+        _repoState = new RepoAnalysisState.Resolving("Fetching repository info...");
+        StateHasChanged();
+        var repoInfo = await GetJsonAsync<GitHubRepo>(
+            $"https://api.github.com/repos/{owner}/{repo}", ct);
+        if (repoInfo is null) return null;
+
+        _repoBranch = repoInfo.DefaultBranch;
+        return repoInfo.DefaultBranch;
+    }
+
+    private async Task<List<string>?> FetchTreeAsync(
+        string owner, string repo, string branch, CancellationToken ct)
+    {
+        _repoState = new RepoAnalysisState.Resolving("Fetching file tree...");
+        StateHasChanged();
+
+        var tree = await GetJsonAsync<GitHubTreeResponse>(
+            $"https://api.github.com/repos/{owner}/{repo}/git/trees/{Uri.EscapeDataString(branch)}?recursive=1", ct);
+        if (tree is null) return null;
+
+        return tree.Tree
+            .Where(n => n.Type == "blob"
+                        && n.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                        && !HasExcludedSegment(n.Path))
+            .Select(n => n.Path)
+            .ToList();
+    }
+
+    private async Task AnalyzeFilesAsync(
+        string owner, string repo, string branch, List<string> csFiles, CancellationToken ct)
+    {
+        var analyzer = new SyntaxAnalyzer();
+        var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
+        var allFindings = new List<Finding>();
+        var failedDownloads = 0;
+        var total = csFiles.Count;
+
+        for (var i = 0; i < csFiles.Count; i++)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                _repoFindings = allFindings.Count > 0 ? allFindings : null;
+                _repoState = new RepoAnalysisState.Cancelled();
+                return;
+            }
+
+            var path = csFiles[i];
+            _repoState = new RepoAnalysisState.Analyzing(i + 1, total, path, failedDownloads);
+
+            if (i % 5 == 0)
+            {
+                StateHasChanged();
+                await Task.Yield();
+            }
+
+            var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{Uri.EscapeDataString(branch)}/{path}";
+            var content = await FetchTextAsync(rawUrl, ct);
+            if (content is null)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    _repoFindings = allFindings.Count > 0 ? allFindings : null;
+                    _repoState = new RepoAnalysisState.Cancelled();
+                    return;
+                }
+                failedDownloads++;
+                continue;
+            }
+
+            var metrics = analyzer.AnalyzeSource(content, path);
+            allFindings.AddRange(metrics.SelectMany(m => FindingFactory.Create(m, thresholds)));
+        }
+
+        _repoFindings = allFindings;
+        _repoState = new RepoAnalysisState.Completed(
+            Branch: branch,
+            Analyzed: total - failedDownloads,
+            FailedDownloads: failedDownloads,
+            FindingsCount: allFindings.Count);
+
+        await RecordHistory("github", $"{owner}/{repo}@{branch}", allFindings);
     }
 
     private void CancelRepoAnalysis() => _repoCts?.Cancel();
@@ -576,17 +588,18 @@
         }
         catch (OperationCanceledException)
         {
+            _repoState = new RepoAnalysisState.Cancelled();
             return null;
         }
         catch (Exception ex)
         {
-            _repoStatus = $"Network error: {ex.Message}";
+            _repoState = new RepoAnalysisState.Failed($"Network error: {ex.Message}");
             return null;
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            _repoStatus = FormatHttpError(response);
+            _repoState = new RepoAnalysisState.Failed(FormatHttpError(response));
             return null;
         }
 
@@ -597,7 +610,7 @@
         }
         catch (JsonException ex)
         {
-            _repoStatus = $"Failed to parse GitHub response: {ex.Message}";
+            _repoState = new RepoAnalysisState.Failed($"Failed to parse GitHub response: {ex.Message}");
             return null;
         }
     }
