@@ -3,7 +3,9 @@
 
 @if (Findings is null)
 {
-    <p><em>Run an analysis to see findings.</em></p>
+    <div class="placeholder-card">
+        Run an analysis to see findings.
+    </div>
 }
 else
 {
@@ -13,117 +15,136 @@ else
     var groups = BuildGroups(filtered);
     var fileCount = groups.Count;
 
-    <div class="findings-controls">
-        <div class="filter-group">
-            <label class="control-label">Severity:</label>
-            <button type="button" class="@FilterBtnClass(_severityFilter == SeverityFilter.Both)"
-                    @onclick="() => SetSeverityFilter(SeverityFilter.Both)">Both</button>
-            <button type="button" class="@FilterBtnClass(_severityFilter == SeverityFilter.ErrorsOnly)"
-                    @onclick="() => SetSeverityFilter(SeverityFilter.ErrorsOnly)">Errors only</button>
-            <button type="button" class="@FilterBtnClass(_severityFilter == SeverityFilter.WarningsOnly)"
-                    @onclick="() => SetSeverityFilter(SeverityFilter.WarningsOnly)">Warnings only</button>
-        </div>
-
-        <div class="filter-group">
-            <label class="control-label">Metrics:</label>
-            @foreach (var mt in Enum.GetValues<MetricType>())
-            {
-                <label class="metric-checkbox">
-                    <input type="checkbox" checked="@_metricFilter.Contains(mt)"
-                           @onchange="@(e => ToggleMetric(mt, (bool)e.Value!))" />
-                    @mt
-                </label>
-            }
-        </div>
-
-        <div class="filter-group">
-            <label class="control-label">Sort by:</label>
-            <select @bind="_sortOrder">
-                <option value="@SortOrder.Severity">Severity</option>
-                <option value="@SortOrder.FilePath">File path</option>
-                <option value="@SortOrder.ValueDesc">Value (descending)</option>
-            </select>
-        </div>
-    </div>
-
-    <button type="button" class="csv-download-btn"
-            @onclick="DownloadCsv"
-            disabled="@(Findings is null || Findings!.Count == 0)">
-        Download CSV
-    </button>
-
     <div class="findings-summary">
-        <span class="badge badge-error">@errorCount error@(errorCount == 1 ? "" : "s")</span>
-        <span class="badge badge-warning">@warningCount warning@(warningCount == 1 ? "" : "s")</span>
-        <span class="files-count">@fileCount file@(fileCount == 1 ? "" : "s") with findings</span>
+        @if (errorCount > 0)
+        {
+            <span class="badge badge-error">@errorCount error@(errorCount == 1 ? "" : "s")</span>
+        }
+        @if (warningCount > 0)
+        {
+            <span class="badge badge-warning">@warningCount warning@(warningCount == 1 ? "" : "s")</span>
+        }
+        @if (errorCount == 0 && warningCount == 0)
+        {
+            <span class="badge badge-clean">No issues</span>
+        }
+        @if (fileCount > 0)
+        {
+            <span class="files-count">across @fileCount file@(fileCount == 1 ? "" : "s")</span>
+        }
     </div>
 
     @if (Findings!.Count == 0)
     {
-        <p>No findings — code is within thresholds.</p>
-    }
-    else if (filtered.Count == 0)
-    {
-        <p>No findings match the current filters.</p>
+        <p class="empty-state">No findings — code is within thresholds.</p>
     }
     else
     {
-        @foreach (var group in groups)
-        {
-            var expanded = _expanded.Contains(group.FilePath);
-            <div class="findings-group @(expanded ? "expanded" : "collapsed")">
-                <button type="button" class="group-header" @onclick="() => Toggle(group.FilePath)">
-                    <span class="chevron">@(expanded ? "▼" : "▶")</span>
-                    <span class="group-path">@group.FilePath</span>
-                    <span class="group-counts">
-                        @if (group.ErrorCount > 0)
-                        {
-                            <span class="badge badge-error">@group.ErrorCount</span>
-                        }
-                        @if (group.WarningCount > 0)
-                        {
-                            <span class="badge badge-warning">@group.WarningCount</span>
-                        }
-                    </span>
-                </button>
+        <div class="findings-controls">
+            <div class="filter-group">
+                <span class="control-label">Severity</span>
+                <button type="button" class="@FilterBtnClass(_severityFilter == SeverityFilter.Both)"
+                        @onclick="() => SetSeverityFilter(SeverityFilter.Both)">All</button>
+                <button type="button" class="@FilterBtnClass(_severityFilter == SeverityFilter.ErrorsOnly)"
+                        @onclick="() => SetSeverityFilter(SeverityFilter.ErrorsOnly)">Errors</button>
+                <button type="button" class="@FilterBtnClass(_severityFilter == SeverityFilter.WarningsOnly)"
+                        @onclick="() => SetSeverityFilter(SeverityFilter.WarningsOnly)">Warnings</button>
+            </div>
 
-                @if (expanded)
+            <div class="filter-group">
+                <span class="control-label">Metrics</span>
+                @foreach (var mt in Enum.GetValues<MetricType>())
                 {
-                    <div class="findings-table-wrapper">
-                        <table class="findings-table">
-                            <thead>
-                                <tr>
-                                    <th>Severity</th>
-                                    <th>Metric</th>
-                                    <th>Method</th>
-                                    <th>Type</th>
-                                    <th>Line</th>
-                                    <th>Value</th>
-                                    <th>Threshold</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var f in group.Findings)
-                                {
-                                    <tr class="@(f.Severity == Severity.Error ? "row-error" : "row-warning")">
-                                        <td><span class="badge @(f.Severity == Severity.Error ? "badge-error" : "badge-warning")">@f.Severity</span></td>
-                                        <td>@f.MetricType</td>
-                                        <td>
-                                            <button type="button" class="finding-link" @onclick="() => OnFindingClick.InvokeAsync(f)">
-                                                @f.MethodName
-                                            </button>
-                                        </td>
-                                        <td>@f.ContainingType</td>
-                                        <td>@f.LineNumber</td>
-                                        <td>@f.Value</td>
-                                        <td>@f.Threshold</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
+                    <label class="metric-checkbox" @key="mt">
+                        <input type="checkbox" checked="@_metricFilter.Contains(mt)"
+                               @onchange="@(e => ToggleMetric(mt, (bool)e.Value!))" />
+                        @mt
+                    </label>
                 }
             </div>
+
+            <div class="filter-group">
+                <span class="control-label">Sort</span>
+                <select @bind="_sortOrder">
+                    <option value="@SortOrder.Severity">Severity</option>
+                    <option value="@SortOrder.FilePath">File path</option>
+                    <option value="@SortOrder.ValueDesc">Value (desc)</option>
+                </select>
+            </div>
+
+            <button type="button" class="btn btn-sm"
+                    @onclick="DownloadCsv"
+                    style="margin-left:auto"
+                    disabled="@(Findings is null || Findings!.Count == 0)">
+                <Icon Name="download" Size="13" />
+                CSV
+            </button>
+        </div>
+
+        @if (filtered.Count == 0)
+        {
+            <p class="empty-state">No findings match the current filters.</p>
+        }
+        else
+        {
+            @foreach (var group in groups)
+            {
+                var expanded = _expanded.Contains(group.FilePath);
+                <div class="findings-group @(expanded ? "expanded" : "collapsed")" @key="group.FilePath">
+                    <button type="button" class="group-header" @onclick="() => Toggle(group.FilePath)">
+                        <span class="chevron">@(expanded ? "▼" : "▶")</span>
+                        <span class="group-path">@group.FilePath</span>
+                        <span class="group-counts">
+                            @if (group.ErrorCount > 0)
+                            {
+                                <span class="badge badge-error">@group.ErrorCount</span>
+                            }
+                            @if (group.WarningCount > 0)
+                            {
+                                <span class="badge badge-warning">@group.WarningCount</span>
+                            }
+                        </span>
+                    </button>
+
+                    @if (expanded)
+                    {
+                        <div class="findings-table-wrapper">
+                            <table class="findings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Severity</th>
+                                        <th>Metric</th>
+                                        <th>Method</th>
+                                        <th>Type</th>
+                                        <th>Line</th>
+                                        <th>Value</th>
+                                        <th>Threshold</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var f in group.Findings)
+                                    {
+                                        <tr class="@(f.Severity == Severity.Error ? "row-error" : "row-warning")"
+                                            @key="(f.FilePath, f.MethodName, f.LineNumber, f.MetricType)">
+                                            <td><span class="badge @(f.Severity == Severity.Error ? "badge-error" : "badge-warning")">@f.Severity</span></td>
+                                            <td>@f.MetricType</td>
+                                            <td>
+                                                <button type="button" class="finding-link" @onclick="() => OnFindingClick.InvokeAsync(f)">
+                                                    @f.MethodName
+                                                </button>
+                                            </td>
+                                            <td>@f.ContainingType</td>
+                                            <td>@f.LineNumber</td>
+                                            <td>@f.Value</td>
+                                            <td>@f.Threshold</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
         }
     }
 }
@@ -142,6 +163,7 @@ else
     private SeverityFilter _severityFilter = SeverityFilter.Both;
     private HashSet<MetricType> _metricFilter = new(Enum.GetValues<MetricType>());
     private SortOrder _sortOrder = SortOrder.Severity;
+    private IReadOnlyList<Finding>? _lastFindingsRef;
 
     private sealed record FileGroup(
         string FilePath,
@@ -151,6 +173,11 @@ else
 
     protected override void OnParametersSet()
     {
+        // Only reset state when the Findings reference actually changes — protects
+        // user-toggled filters across unrelated re-renders.
+        if (ReferenceEquals(Findings, _lastFindingsRef)) return;
+        _lastFindingsRef = Findings;
+
         _severityFilter = SeverityFilter.Both;
         _metricFilter = new HashSet<MetricType>(Enum.GetValues<MetricType>());
         _sortOrder = SortOrder.Severity;
@@ -162,9 +189,6 @@ else
         }
 
         var groups = Findings.GroupBy(f => f.FilePath).ToList();
-
-        // Default: expand all if <= 5 groups, collapse otherwise.
-        // Reset expansion state whenever Findings instance changes.
         _expanded = groups.Count <= 5
             ? new HashSet<string>(groups.Select(g => g.Key))
             : new HashSet<string>();

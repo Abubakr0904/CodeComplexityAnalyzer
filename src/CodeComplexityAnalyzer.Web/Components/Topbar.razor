@@ -1,0 +1,43 @@
+<header class="topbar">
+    <div class="topbar-inner">
+        <a class="brand" href="@Href" aria-label="cca · Code Complexity Analyzer">
+            <Icon Name="logo" Size="28" Class="brand-mark" />
+            <div class="brand-text">
+                <span class="brand-name">cca</span>
+                <span class="brand-sub">Code Complexity Analyzer</span>
+            </div>
+        </a>
+
+        <div class="topbar-actions">
+            <HistoryDropdown History="History" OnRestore="OnRestoreHistory" OnClear="OnClearHistory" />
+            <div class="theme-toggle" role="group" aria-label="Theme">
+                <button type="button"
+                        class="theme-btn @(Theme == "light" ? "active" : "")"
+                        @onclick='() => SetTheme("light")'
+                        title="Light theme"
+                        aria-pressed="@(Theme == "light")"><Icon Name="sun" Size="16" /></button>
+                <button type="button"
+                        class="theme-btn @(Theme == "system" ? "active" : "")"
+                        @onclick='() => SetTheme("system")'
+                        title="System theme"
+                        aria-pressed="@(Theme == "system")"><Icon Name="monitor" Size="16" /></button>
+                <button type="button"
+                        class="theme-btn @(Theme == "dark" ? "active" : "")"
+                        @onclick='() => SetTheme("dark")'
+                        title="Dark theme"
+                        aria-pressed="@(Theme == "dark")"><Icon Name="moon" Size="16" /></button>
+            </div>
+        </div>
+    </div>
+</header>
+
+@code {
+    [Parameter] public string Theme { get; set; } = "system";
+    [Parameter] public EventCallback<string> ThemeChanged { get; set; }
+    [Parameter] public IReadOnlyList<HistoryEntry> History { get; set; } = Array.Empty<HistoryEntry>();
+    [Parameter] public EventCallback<HistoryEntry> OnRestoreHistory { get; set; }
+    [Parameter] public EventCallback OnClearHistory { get; set; }
+    [Parameter] public string Href { get; set; } = "";
+
+    private Task SetTheme(string theme) => ThemeChanged.InvokeAsync(theme);
+}

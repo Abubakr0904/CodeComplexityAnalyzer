@@ -1,0 +1,61 @@
+.thresholds-card {
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.thresholds-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+}
+
+.thresholds-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.thresholds-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.85rem;
+}
+
+@media (max-width: 880px) {
+    .thresholds-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .thresholds-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.threshold-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.threshold-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.threshold-field input {
+    padding: 0.4rem 0.6rem;
+}
+
+.threshold-hint {
+    font-size: 0.74rem;
+    color: var(--text-faint);
+}

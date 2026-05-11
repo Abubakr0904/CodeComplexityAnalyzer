@@ -9,140 +9,121 @@
 @inject HttpClient Http
 @inject Microsoft.JSInterop.IJSRuntime JS
 
-<PageTitle>Code Complexity Analyzer</PageTitle>
+<PageTitle>cca · Code Complexity Analyzer</PageTitle>
 
-<h1>Code Complexity Analyzer</h1>
+<Topbar Theme="@_theme"
+        ThemeChanged="OnThemeChanged"
+        History="@_history"
+        OnRestoreHistory="RestoreFromHistory"
+        OnClearHistory="ClearHistory" />
 
-<div class="theme-toggle">
-    <label for="themeSelect">Theme:</label>
-    <select id="themeSelect" @bind="_theme" @bind:after="OnThemeChange">
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-    </select>
-</div>
+<div class="app-shell">
+    <section class="hero">
+        <h1>Find C# complexity hotspots in seconds.</h1>
+        <p class="hero-tagline">
+            Paste a C# snippet or analyze any public GitHub repo. <strong>Roslyn-powered, runs entirely in your browser</strong> — no upload, no server.
+        </p>
+    </section>
 
-<div class="history-panel-container">
-    <button class="history-toggle" @onclick="() => _historyOpen = !_historyOpen" disabled="@(_history.Count == 0)">
-        History (@_history.Count)
-    </button>
-    @if (_historyOpen)
+    <ThresholdsCard MaxCc="_maxCc" MaxCcChanged="@(v => _maxCc = v)"
+                    MaxLines="_maxLines" MaxLinesChanged="@(v => _maxLines = v)"
+                    MaxParams="_maxParams" MaxParamsChanged="@(v => _maxParams = v)"
+                    MinMi="_minMi" MinMiChanged="@(v => _minMi = v)" />
+
+    <ModeTabs Active="@_activeMode" ActiveChanged="@(v => _activeMode = v)" />
+
+    @if (_activeMode == "paste")
     {
-        <div class="history-panel">
-            <div class="history-header">
-                <span>Recent analyses</span>
-                <button class="history-clear" @onclick="ClearHistory">Clear all</button>
+        <div class="card">
+            <h2 class="section-title">
+                <Icon Name="code" Size="16" /> Paste C# source
+                <span class="section-title-tag">live</span>
+            </h2>
+
+            <div class="drop-zone @(_isDragging ? "dragging" : "")"
+                 @ondragenter="OnDragEnter"
+                 @ondragover="OnDragOver"
+                 @ondragover:preventDefault="true"
+                 @ondragleave="OnDragLeave"
+                 @ondrop="OnDrop"
+                 @ondrop:preventDefault="true">
+                <div id="@_editorId" class="monaco-host"></div>
+                <div class="drop-hint">Drop .cs files here</div>
             </div>
-            @if (_history.Count == 0)
+
+            <div class="input-actions" style="margin-top: 0.85rem;">
+                <button type="button" class="btn btn-primary" @onclick="Analyze" disabled="@_isAnalyzing">
+                    <Icon Name="play" Size="13" />
+                    @(_isAnalyzing ? "Analyzing…" : "Analyze")
+                </button>
+                <label class="auto-toggle">
+                    <input type="checkbox" @bind="_autoAnalyze" />
+                    Auto-analyze on type
+                    <span style="color: var(--text-faint); font-size: 0.78rem;">(debounced 400 ms)</span>
+                </label>
+            </div>
+
+            <FindingsTable Findings="_findings" OnFindingClick="HandleFindingClickPaste" />
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <h2 class="section-title">
+                <Icon Name="github" Size="16" /> Analyze a GitHub repo
+                <span class="section-title-tag">no upload</span>
+            </h2>
+
+            <div class="github-inputs">
+                <label class="input-field full-width">
+                    <span class="input-field-label">Repository URL</span>
+                    <input type="text"
+                           @bind="_repoUrl"
+                           placeholder="https://github.com/owner/repo" />
+                </label>
+                <label class="input-field">
+                    <span class="input-field-label">Branch (optional)</span>
+                    <input type="text"
+                           @bind="_repoBranch"
+                           placeholder="defaults to repo's default" />
+                </label>
+                <label class="input-field">
+                    <span class="input-field-label">Personal access token (optional)</span>
+                    <input type="password"
+                           @bind="_githubToken"
+                           placeholder="ghp_… raises rate limit" />
+                </label>
+            </div>
+
+            <div class="input-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-primary" @onclick="AnalyzeRepo" disabled="@_isAnalyzingRepo">
+                    <Icon Name="play" Size="13" />
+                    @(_isAnalyzingRepo ? "Analyzing…" : "Analyze repo")
+                </button>
+                <button type="button" class="btn btn-ghost" @onclick="CancelRepoAnalysis" disabled="@(!_isAnalyzingRepo)">
+                    <Icon Name="stop" Size="13" />
+                    Cancel
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_repoStatus))
             {
-                <div class="history-empty">No saved analyses yet.</div>
+                <p class="repo-status">@_repoStatus</p>
             }
-            else
-            {
-                <ul class="history-list">
-                    @foreach (var entry in _history)
-                    {
-                        <li>
-                            <button class="history-item" @onclick="() => RestoreFromHistory(entry)">
-                                <span class="history-mode">@entry.Mode</span>
-                                <span class="history-source">@entry.SourceId</span>
-                                <span class="history-counts">
-                                    @if (entry.ErrorCount > 0) { <span class="badge badge-error">@entry.ErrorCount</span> }
-                                    @if (entry.WarningCount > 0) { <span class="badge badge-warning">@entry.WarningCount</span> }
-                                </span>
-                                <span class="history-time">@entry.TimestampUtc.ToString("yyyy-MM-dd HH:mm UTC")</span>
-                            </button>
-                        </li>
-                    }
-                </ul>
-            }
+
+            <FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" />
         </div>
     }
 </div>
 
-<div class="thresholds">
-    <label>Max cyclomatic complexity: <input type="number" min="1" @bind="_maxCc" /></label>
-    <label>Max method line count: <input type="number" min="1" @bind="_maxLines" /></label>
-    <label>Max parameter count: <input type="number" min="0" @bind="_maxParams" /></label>
-    <label>Min maintainability index (0-100): <input type="number" min="0" max="100" @bind="_minMi" /></label>
-</div>
-
-<hr />
-
-<h2>Paste C# source</h2>
-
-<div class="drop-zone @(_isDragging ? "dragging" : "")"
-     @ondragenter="OnDragEnter"
-     @ondragover="OnDragOver"
-     @ondragover:preventDefault="true"
-     @ondragleave="OnDragLeave"
-     @ondrop="OnDrop"
-     @ondrop:preventDefault="true">
-    <div id="@_editorId" class="monaco-host"></div>
-    <div class="drop-hint">Drop .cs files here</div>
-</div>
-
-<div>
-    <button @onclick="Analyze" disabled="@_isAnalyzing">Analyze</button>
-    <label class="auto-toggle">
-        <input type="checkbox" @bind="_autoAnalyze" />
-        Auto-analyze (debounced 400ms)
-    </label>
-</div>
-
-<FindingsTable Findings="_findings" OnFindingClick="HandleFindingClickPaste" />
-
-<hr />
-
-<h2>Analyze a GitHub repo</h2>
-
-<div class="github-inputs">
-    <div>
-        <label>
-            GitHub repo URL:
-            <input type="text"
-                   size="60"
-                   @bind="_repoUrl"
-                   placeholder="https://github.com/owner/repo" />
-        </label>
-    </div>
-    <div>
-        <label>
-            Personal access token (optional, raises rate limit):
-            <input type="password"
-                   size="60"
-                   @bind="_githubToken"
-                   placeholder="ghp_..." />
-        </label>
-    </div>
-    <div>
-        <label>
-            Branch (optional, defaults to repo's default branch):
-            <input type="text"
-                   size="60"
-                   @bind="_repoBranch"
-                   placeholder="leave empty for default" />
-        </label>
-    </div>
-    <div>
-        <button @onclick="AnalyzeRepo" disabled="@_isAnalyzingRepo">Analyze repo</button>
-        <button @onclick="CancelRepoAnalysis" disabled="@(!_isAnalyzingRepo)">Cancel</button>
-    </div>
-</div>
-
-@if (!string.IsNullOrEmpty(_repoStatus))
-{
-    <p class="repo-status">@_repoStatus</p>
-}
-
-<FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" />
-
 @code {
-    // ── Theme ─────────────────────────────────────────────────────────────────
+    // ── UI state ──────────────────────────────────────────────────────────────
+    private string _activeMode = "paste";
     private string _theme = "system";
 
-    private async Task OnThemeChange()
+    private async Task OnThemeChanged(string theme)
     {
+        _theme = theme;
         var effective = await JS.InvokeAsync<string>("ccaTheme.set", _theme);
         if (_editorInitialized)
         {
@@ -154,7 +135,6 @@
     private const string HistoryKey = "cca-history-v1";
     private const int HistoryMax = 20;
     private List<HistoryEntry> _history = new();
-    private bool _historyOpen = false;
 
     private static readonly JsonSerializerOptions HistoryJsonOptions = new()
     {
@@ -199,7 +179,6 @@
             return;
         }
 
-        // Debounce: cancel any pending analysis, schedule a new one
         _debounceCts?.Cancel();
         _debounceCts?.Dispose();
         _debounceCts = new CancellationTokenSource();
@@ -272,11 +251,11 @@
         if (entry.Mode == "paste")
         {
             _findings = entry.Findings.ToList();
+            _activeMode = "paste";
         }
         else
         {
             _repoFindings = entry.Findings.ToList();
-            // SourceId format is "owner/repo@branch" — restore URL and branch separately
             var atIdx = entry.SourceId.IndexOf('@');
             if (atIdx >= 0)
             {
@@ -288,12 +267,12 @@
                 _repoUrl = entry.SourceId;
                 _repoBranch = string.Empty;
             }
+            _activeMode = "github";
         }
         _maxCc = entry.MaxCc;
         _maxLines = entry.MaxLines;
         _maxParams = entry.MaxParams;
         _minMi = entry.MinMi;
-        _historyOpen = false;
     }
 
     private async Task ClearHistory()
@@ -339,6 +318,7 @@
             _sourceCode = sb.ToString().TrimEnd();
             StateHasChanged();
         }
+        await Task.CompletedTask;
     }
 
     private sealed record FileDescriptor(string Name, string Content);
@@ -388,7 +368,6 @@
     private int _failedDownloads;
     private CancellationTokenSource? _repoCts;
 
-    // DTOs for GitHub API responses
     private sealed record GitHubRepo(
         [property: JsonPropertyName("default_branch")] string DefaultBranch);
 
@@ -411,7 +390,6 @@
 
     private async Task AnalyzeRepo()
     {
-        // Cancel any in-flight analysis and start fresh
         _repoCts?.Cancel();
         _repoCts?.Dispose();
         _repoCts = new CancellationTokenSource();
@@ -425,14 +403,12 @@
 
         try
         {
-            // Parse owner/repo from URL
             if (!TryParseRepoUrl(_repoUrl, out var owner, out var repo))
             {
                 _repoStatus = "Invalid URL. Expected: https://github.com/owner/repo";
                 return;
             }
 
-            // Resolve branch — use input if provided, otherwise fetch default
             string branch;
             if (!string.IsNullOrWhiteSpace(_repoBranch))
             {
@@ -448,10 +424,9 @@
                     $"https://api.github.com/repos/{owner}/{repo}", ct);
                 if (repoInfo is null) return;
                 branch = repoInfo.DefaultBranch;
-                _repoBranch = branch;  // auto-fill for subsequent analyses
+                _repoBranch = branch;
             }
 
-            // Fetch recursive file tree
             _repoStatus = "Fetching file tree...";
             StateHasChanged();
 
@@ -478,7 +453,6 @@
                 StateHasChanged();
             }
 
-            // Analyze each file
             var analyzer = new SyntaxAnalyzer();
             var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
             var allFindings = new List<Finding>();
