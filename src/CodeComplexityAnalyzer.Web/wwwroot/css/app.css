@@ -753,3 +753,23 @@ main {
     padding: var(--space-6);
     border-radius: var(--radius);
 }
+
+/* ── Service worker update toast ───────────────────────────────────────── */
+.sw-update-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 1rem;
+    background-color: var(--bg-elevated);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    font-size: 0.9rem;
+    z-index: 1000;
+    max-width: calc(100% - 2rem);
+}

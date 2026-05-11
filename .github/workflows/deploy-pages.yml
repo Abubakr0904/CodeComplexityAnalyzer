@@ -43,6 +43,11 @@ jobs:
           sed -i 's|<base href="/" />|<base href="/CodeComplexityAnalyzer/" />|g' \
             publish/wwwroot/index.html
 
+      - name: Stamp service worker cache version with commit SHA
+        run: |
+          sed -i "s|__CCA_BUILD_HASH__|${GITHUB_SHA}|g" \
+            publish/wwwroot/service-worker.js
+
       - name: Add .nojekyll so _framework folder is served
         run: touch publish/wwwroot/.nojekyll
 
