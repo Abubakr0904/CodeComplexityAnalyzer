@@ -16,7 +16,7 @@
 
     @if (_open && History.Count > 0)
     {
-        <div class="history-panel" role="menu">
+        <div class="history-panel" aria-label="Recent analyses">
             <div class="history-header">
                 <span>Recent analyses</span>
                 <button type="button" class="btn btn-sm btn-danger" @onclick="HandleClear">

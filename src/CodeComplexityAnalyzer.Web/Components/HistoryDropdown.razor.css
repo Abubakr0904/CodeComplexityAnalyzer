@@ -47,8 +47,9 @@
     position: absolute;
     top: calc(100% + 0.4rem);
     right: 0;
-    min-width: 380px;
-    max-width: 520px;
+    width: min(520px, calc(100vw - 1rem));
+    max-width: calc(100vw - 1rem);
+    min-width: 0;
     max-height: 440px;
     overflow-y: auto;
     background-color: var(--bg-elevated);
