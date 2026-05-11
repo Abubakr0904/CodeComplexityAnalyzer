@@ -52,14 +52,39 @@ window.ccaStorage = {
 
 window.ccaMonaco = (() => {
     const editors = new Map(); // elementId -> monaco editor instance
+    const MONACO_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
     let monacoReady = null;
+    let loaderReady = null;
+
+    // Inject Monaco's AMD loader on demand. Removed from <head> so it no longer
+    // blocks the initial page paint or competes with Blazor's WASM download.
+    function loadLoaderScript() {
+        // `typeof require` alone is not sufficient — pages might embed
+        // RequireJS or another AMD loader. Skip injection only if Monaco's
+        // loader appears present (Monaco's loader exposes require.config as a
+        // function) or if monaco itself is already on the global.
+        if (typeof window.monaco !== 'undefined') return Promise.resolve();
+        if (typeof require !== 'undefined' && typeof require.config === 'function') return Promise.resolve();
+        if (loaderReady) return loaderReady;
+        loaderReady = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = `${MONACO_BASE}/loader.js`;
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load Monaco loader'));
+            document.head.appendChild(script);
+        });
+        return loaderReady;
+    }
 
     function ensureMonaco() {
         if (monacoReady) return monacoReady;
-        monacoReady = new Promise((resolve) => {
-            require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-            require(['vs/editor/editor.main'], () => resolve());
-        });
+        monacoReady = loadLoaderScript().then(() =>
+            new Promise((resolve) => {
+                require.config({ paths: { 'vs': MONACO_BASE } });
+                require(['vs/editor/editor.main'], () => resolve());
+            })
+        );
         return monacoReady;
     }
 
@@ -165,6 +190,50 @@ window.ccaTheme = (() => {
         getEffective() {
             const setting = localStorage.getItem(KEY) || 'system';
             return resolveEffective(setting);
+        }
+    };
+})();
+
+// Keyboard shortcuts bridge. Index.razor registers a DotNetObjectReference and
+// we forward Ctrl/Cmd+Enter (analyze), Esc (cancel repo), and Ctrl/Cmd+Shift+L
+// (toggle theme) to its [JSInvokable] methods. Returns the platform's modifier
+// label so the UI can render the correct hint.
+window.ccaShortcuts = (() => {
+    let dotnetRef = null;
+    let attached = false;
+    const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || '');
+
+    function handler(e) {
+        if (!dotnetRef) return;
+        const mod = isMac ? e.metaKey : e.ctrlKey;
+        if (mod && e.key === 'Enter') {
+            e.preventDefault();
+            dotnetRef.invokeMethodAsync('OnShortcutAnalyze');
+        } else if (e.key === 'Escape') {
+            dotnetRef.invokeMethodAsync('OnShortcutCancel');
+        } else if (mod && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+            e.preventDefault();
+            dotnetRef.invokeMethodAsync('OnShortcutToggleTheme');
+        }
+    }
+
+    return {
+        attach(ref) {
+            dotnetRef = ref;
+            if (!attached) {
+                document.addEventListener('keydown', handler);
+                attached = true;
+            }
+        },
+        detach() {
+            if (attached) {
+                document.removeEventListener('keydown', handler);
+                attached = false;
+            }
+            dotnetRef = null;
+        },
+        modLabel() {
+            return isMac ? '⌘' : 'Ctrl';
         }
     };
 })();

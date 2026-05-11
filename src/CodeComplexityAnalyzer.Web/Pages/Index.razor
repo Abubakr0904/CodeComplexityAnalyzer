@@ -55,6 +55,11 @@
             <button type="button" class="btn btn-primary" @onclick="Analyze" disabled="@_isAnalyzing">
                 <Icon Name="play" Size="13" />
                 @(_isAnalyzing ? "Analyzing…" : "Analyze")
+                <kbd class="kbd-inline">@KbdAnalyze</kbd>
+            </button>
+            <button type="button" class="btn btn-ghost" @onclick="LoadSampleSnippet"
+                    title="Load a deliberately complex C# snippet to demo the analyzer">
+                Try a sample
             </button>
             <label class="auto-toggle">
                 <input type="checkbox" @bind="_autoAnalyze" />
@@ -81,6 +86,24 @@
                 <input type="text"
                        @bind="_repoUrl"
                        placeholder="https://github.com/owner/repo" />
+                @{
+                    var recent = BuildRecentRepoChips();
+                }
+                @if (recent.Count > 0)
+                {
+                    <div class="recent-repos">
+                        <span class="recent-repos-label">Recent:</span>
+                        @foreach (var chip in recent)
+                        {
+                            <button type="button" class="recent-chip" @key="chip.Source"
+                                    @onclick="() => UseRecentRepo(chip)"
+                                    title="@chip.Source">
+                                <Icon Name="github" Size="11" />
+                                <span>@chip.Display</span>
+                            </button>
+                        }
+                    </div>
+                }
             </label>
             <label class="input-field">
                 <span class="input-field-label">Branch (optional)</span>
@@ -107,10 +130,11 @@
             </button>
         </div>
 
-        @if (!string.IsNullOrEmpty(_repoStatus))
-        {
-            <p class="repo-status">@_repoStatus</p>
+        @{
+            var repoStatusText = _repoState.ToStatusText();
         }
+        <p class="repo-status" role="status" aria-live="polite"
+           hidden="@string.IsNullOrEmpty(repoStatusText)">@repoStatusText</p>
 
         <FindingsTable Findings="_repoFindings"
                        OnFindingClick="HandleFindingClickRepo"
@@ -119,10 +143,20 @@
     </div>
 </div>
 
+@if (_updateAvailable)
+{
+    <div class="sw-update-toast" role="status" aria-live="polite">
+        <span>New version available — reload to update.</span>
+        <button type="button" class="btn btn-primary btn-sm" @onclick="ReloadForUpdate">Reload</button>
+    </div>
+}
+
 @code {
     // ── UI state ──────────────────────────────────────────────────────────────
     private string _activeMode = "paste";
     private string _theme = "system";
+    private string _modLabel = "Ctrl";
+    private string KbdAnalyze => $"{_modLabel}+↵";
 
     private async Task OnThemeChanged(string theme)
     {
@@ -159,8 +193,20 @@
             StateHasChanged();
             await LoadHistoryAsync();
             _selfRef = DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("ccaPwa.registerUpdateHandler", _selfRef);
+            }
+            catch { /* PWA bridge optional — ignore if unavailable */ }
             var ok = await JS.InvokeAsync<bool>("ccaMonaco.create", _editorId, _sourceCode, _selfRef);
             _editorInitialized = ok;
+            try
+            {
+                await JS.InvokeVoidAsync("ccaShortcuts.attach", _selfRef);
+                _modLabel = await JS.InvokeAsync<string>("ccaShortcuts.modLabel") ?? "Ctrl";
+                StateHasChanged();
+            }
+            catch { /* shortcuts are optional */ }
         }
         else if (_editorInitialized && _sourceCode != _lastEditorValue)
         {
@@ -168,6 +214,22 @@
             await JS.InvokeVoidAsync("ccaMonaco.setValue", _editorId, _sourceCode);
             _lastEditorValue = _sourceCode;
         }
+    }
+
+    // ── Service worker update toast ───────────────────────────────────────────
+    private bool _updateAvailable;
+
+    [JSInvokable]
+    public Task OnSwUpdate()
+    {
+        _updateAvailable = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task ReloadForUpdate()
+    {
+        await JS.InvokeVoidAsync("location.reload");
     }
 
     [JSInvokable]
@@ -325,6 +387,96 @@
     }
 
     private sealed record FileDescriptor(string Name, string Content);
+
+    // ── Sample snippet ────────────────────────────────────────────────────────
+    private const string SampleSnippet = @"using System;
+using System.Collections.Generic;
+
+namespace Demo;
+
+public class OrderProcessor
+{
+    // Deliberately complex method to demo cca's flagging.
+    public string ProcessOrder(string id, int qty, decimal price, bool rush,
+                               string couponCode, string region, bool isMember,
+                               decimal balance)
+    {
+        var notes = new List<string>();
+        if (qty <= 0) return ""invalid qty"";
+        if (price < 0) return ""invalid price"";
+        if (string.IsNullOrEmpty(id)) return ""no id"";
+
+        decimal total = qty * price;
+
+        if (rush) total += 10;
+        else if (region == ""EU"") total += 5;
+        else if (region == ""APAC"") total += 7;
+        else if (region == ""NA"") total += 3;
+
+        if (couponCode == ""SAVE10"") total *= 0.9m;
+        else if (couponCode == ""SAVE20"") total *= 0.8m;
+        else if (couponCode == ""VIP"" && isMember) total *= 0.7m;
+
+        if (balance < total)
+        {
+            notes.Add(""low balance"");
+            if (isMember && balance > total * 0.5m) total *= 0.95m;
+            else if (isMember) total *= 0.85m;
+            else return ""insufficient funds"";
+        }
+
+        for (int i = 0; i < qty; i++)
+        {
+            if (i % 10 == 0) notes.Add($""checkpoint {i}"");
+            if (rush && i > 100) break;
+        }
+
+        return total + "" : "" + string.Join("","", notes);
+    }
+}
+";
+
+    private async Task LoadSampleSnippet()
+    {
+        _sourceCode = SampleSnippet;
+        StateHasChanged();
+        // OnAfterRenderAsync pushes the new value into Monaco via setValue.
+        await Task.CompletedTask;
+    }
+
+    // ── Recent repos (derived from history) ───────────────────────────────────
+    private sealed record RecentRepoChip(string Source, string Display, string Url, string Branch);
+
+    private List<RecentRepoChip> BuildRecentRepoChips()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var chips = new List<RecentRepoChip>();
+        foreach (var entry in _history)
+        {
+            if (entry.Mode != "github") continue;
+            if (!seen.Add(entry.SourceId)) continue;
+
+            var atIdx = entry.SourceId.IndexOf('@');
+            var ownerRepo = atIdx >= 0 ? entry.SourceId[..atIdx] : entry.SourceId;
+            var branch = atIdx >= 0 ? entry.SourceId[(atIdx + 1)..] : string.Empty;
+
+            chips.Add(new RecentRepoChip(
+                Source: entry.SourceId,
+                Display: ownerRepo,
+                Url: $"https://github.com/{ownerRepo}",
+                Branch: branch));
+
+            if (chips.Count >= 5) break;
+        }
+        return chips;
+    }
+
+    private void UseRecentRepo(RecentRepoChip chip)
+    {
+        _repoUrl = chip.Url;
+        _repoBranch = chip.Branch;
+    }
+
     private int _maxCc = 10;
     private int _maxLines = 60;
     private int _maxParams = 5;
@@ -377,12 +529,12 @@
     private string _repoUrl = string.Empty;
     private string _githubToken = string.Empty;
     private string _repoBranch = string.Empty;
-    private string _repoStatus = string.Empty;
     private List<Finding>? _repoFindings;
     private AnalysisReport? _repoReport;
-    private bool _isAnalyzingRepo;
-    private int _failedDownloads;
+    private RepoAnalysisState _repoState = new RepoAnalysisState.Idle();
     private CancellationTokenSource? _repoCts;
+
+    private bool _isAnalyzingRepo => _repoState.IsRunning();
 
     private sealed record GitHubRepo(
         [property: JsonPropertyName("default_branch")] string DefaultBranch);
@@ -412,129 +564,138 @@
         var ct = _repoCts.Token;
 
         _repoFindings = null;
-        _repoStatus = string.Empty;
-        _failedDownloads = 0;
-        _isAnalyzingRepo = true;
+        _repoState = new RepoAnalysisState.Resolving(string.Empty);
         StateHasChanged();
 
         try
         {
             if (!TryParseRepoUrl(_repoUrl, out var owner, out var repo))
             {
-                _repoStatus = "Invalid URL. Expected: https://github.com/owner/repo";
+                _repoState = new RepoAnalysisState.Failed(
+                    "Invalid URL. Expected: https://github.com/owner/repo");
                 return;
             }
 
-            string branch;
-            if (!string.IsNullOrWhiteSpace(_repoBranch))
-            {
-                branch = _repoBranch.Trim();
-                _repoStatus = $"Analyzing branch '{branch}'...";
-                StateHasChanged();
-            }
-            else
-            {
-                _repoStatus = "Fetching repository info...";
-                StateHasChanged();
-                var repoInfo = await GetJsonAsync<GitHubRepo>(
-                    $"https://api.github.com/repos/{owner}/{repo}", ct);
-                if (repoInfo is null) return;
-                branch = repoInfo.DefaultBranch;
-                _repoBranch = branch;
-            }
+            var branch = await ResolveBranchAsync(owner, repo, ct);
+            if (branch is null) return;
 
-            _repoStatus = "Fetching file tree...";
-            StateHasChanged();
-
-            var tree = await GetJsonAsync<GitHubTreeResponse>(
-                $"https://api.github.com/repos/{owner}/{repo}/git/trees/{Uri.EscapeDataString(branch)}?recursive=1", ct);
-            if (tree is null) return;
-
-            var csFiles = tree.Tree
-                .Where(n => n.Type == "blob"
-                            && n.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                            && !HasExcludedSegment(n.Path))
-                .Select(n => n.Path)
-                .ToList();
+            var csFiles = await FetchTreeAsync(owner, repo, branch, ct);
+            if (csFiles is null) return;
 
             if (csFiles.Count == 0)
             {
-                _repoStatus = "No .cs files found in repository.";
+                _repoState = new RepoAnalysisState.Failed("No .cs files found in repository.");
                 return;
             }
 
-            if (tree.Truncated)
-            {
-                _repoStatus = "Warning: GitHub returned a truncated file tree — results may be incomplete. ";
-                StateHasChanged();
-            }
-
-            var analyzer = new SyntaxAnalyzer();
-            var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
-            var allFindings = new List<Finding>();
-            var allMethods = new List<MethodMetrics>();
-            var total = csFiles.Count;
-
-            for (var i = 0; i < csFiles.Count; i++)
-            {
-                if (ct.IsCancellationRequested)
-                {
-                    _repoStatus = "Cancelled.";
-                    _repoFindings = allFindings.Count > 0 ? allFindings : null;
-                    return;
-                }
-
-                var path = csFiles[i];
-                _repoStatus = $"Analyzing {i + 1}/{total}: {path}";
-
-                if (i % 5 == 0)
-                {
-                    StateHasChanged();
-                    await Task.Yield();
-                }
-
-                var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{Uri.EscapeDataString(branch)}/{path}";
-                var content = await FetchTextAsync(rawUrl, ct);
-                if (content is null)
-                {
-                    if (ct.IsCancellationRequested)
-                    {
-                        _repoStatus = "Cancelled.";
-                        _repoFindings = allFindings.Count > 0 ? allFindings : null;
-                        return;
-                    }
-                    _failedDownloads++;
-                    continue;
-                }
-
-                var metrics = analyzer.AnalyzeSource(content, path).ToList();
-                allMethods.AddRange(metrics);
-                allFindings.AddRange(metrics.SelectMany(m => FindingFactory.Create(m, thresholds)));
-            }
-
-            _repoFindings = allFindings;
-            var hotspots = allMethods.Where(m => FindingFactory.Create(m, thresholds).Any()).ToList();
-            _repoReport = new AnalysisReport(
-                RootPath: $"{owner}/{repo}",
-                FilesAnalyzed: total - _failedDownloads,
-                MethodsAnalyzed: allMethods.Count,
-                Methods: allMethods,
-                Hotspots: hotspots);
-            var actualAnalyzedCount = total - _failedDownloads;
-            var failSuffix = _failedDownloads > 0
-                ? $" ({_failedDownloads} file(s) could not be downloaded)"
-                : string.Empty;
-            _repoStatus = allFindings.Count == 0
-                ? $"Analyzed {actualAnalyzedCount} files on branch '{branch}' — no findings (all within thresholds).{failSuffix}"
-                : $"Analyzed {actualAnalyzedCount} files on branch '{branch}' — {allFindings.Count} finding(s).{failSuffix}";
-
-            await RecordHistory("github", $"{owner}/{repo}@{branch}", allFindings);
+            await AnalyzeFilesAsync(owner, repo, branch, csFiles, ct);
         }
         finally
         {
-            _isAnalyzingRepo = false;
             StateHasChanged();
         }
+    }
+
+    private async Task<string?> ResolveBranchAsync(string owner, string repo, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(_repoBranch))
+        {
+            var branch = _repoBranch.Trim();
+            _repoState = new RepoAnalysisState.Fetching(branch);
+            StateHasChanged();
+            return branch;
+        }
+
+        _repoState = new RepoAnalysisState.Resolving("Fetching repository info...");
+        StateHasChanged();
+        var repoInfo = await GetJsonAsync<GitHubRepo>(
+            $"https://api.github.com/repos/{owner}/{repo}", ct);
+        if (repoInfo is null) return null;
+
+        _repoBranch = repoInfo.DefaultBranch;
+        return repoInfo.DefaultBranch;
+    }
+
+    private async Task<List<string>?> FetchTreeAsync(
+        string owner, string repo, string branch, CancellationToken ct)
+    {
+        _repoState = new RepoAnalysisState.Resolving("Fetching file tree...");
+        StateHasChanged();
+
+        var tree = await GetJsonAsync<GitHubTreeResponse>(
+            $"https://api.github.com/repos/{owner}/{repo}/git/trees/{Uri.EscapeDataString(branch)}?recursive=1", ct);
+        if (tree is null) return null;
+
+        return tree.Tree
+            .Where(n => n.Type == "blob"
+                        && n.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                        && !HasExcludedSegment(n.Path))
+            .Select(n => n.Path)
+            .ToList();
+    }
+
+    private async Task AnalyzeFilesAsync(
+        string owner, string repo, string branch, List<string> csFiles, CancellationToken ct)
+    {
+        var analyzer = new SyntaxAnalyzer();
+        var thresholds = new Thresholds(_maxCc, _maxLines, _maxParams, _minMi);
+        var allFindings = new List<Finding>();
+        var allMethods = new List<MethodMetrics>();
+        var failedDownloads = 0;
+        var total = csFiles.Count;
+
+        for (var i = 0; i < csFiles.Count; i++)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                _repoFindings = allFindings.Count > 0 ? allFindings : null;
+                _repoState = new RepoAnalysisState.Cancelled();
+                return;
+            }
+
+            var path = csFiles[i];
+            _repoState = new RepoAnalysisState.Analyzing(i + 1, total, path, failedDownloads);
+
+            if (i % 5 == 0)
+            {
+                StateHasChanged();
+                await Task.Yield();
+            }
+
+            var rawUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{Uri.EscapeDataString(branch)}/{path}";
+            var content = await FetchTextAsync(rawUrl, ct);
+            if (content is null)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    _repoFindings = allFindings.Count > 0 ? allFindings : null;
+                    _repoState = new RepoAnalysisState.Cancelled();
+                    return;
+                }
+                failedDownloads++;
+                continue;
+            }
+
+            var metrics = analyzer.AnalyzeSource(content, path).ToList();
+            allMethods.AddRange(metrics);
+            allFindings.AddRange(metrics.SelectMany(m => FindingFactory.Create(m, thresholds)));
+        }
+
+        _repoFindings = allFindings;
+        var hotspots = allMethods.Where(m => FindingFactory.Create(m, thresholds).Any()).ToList();
+        _repoReport = new AnalysisReport(
+            RootPath: $"{owner}/{repo}",
+            FilesAnalyzed: total - failedDownloads,
+            MethodsAnalyzed: allMethods.Count,
+            Methods: allMethods,
+            Hotspots: hotspots);
+        _repoState = new RepoAnalysisState.Completed(
+            Branch: branch,
+            Analyzed: total - failedDownloads,
+            FailedDownloads: failedDownloads,
+            FindingsCount: allFindings.Count);
+
+        await RecordHistory("github", $"{owner}/{repo}@{branch}", allFindings);
     }
 
     private void CancelRepoAnalysis() => _repoCts?.Cancel();
@@ -588,6 +749,41 @@
         await JS.InvokeVoidAsync("open", url, "_blank");
     }
 
+    // ── Keyboard shortcuts ────────────────────────────────────────────────────
+    [JSInvokable]
+    public async Task OnShortcutAnalyze()
+    {
+        if (_activeMode == "paste")
+        {
+            if (!_isAnalyzing) await Analyze();
+        }
+        else
+        {
+            if (!_isAnalyzingRepo) await AnalyzeRepo();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnShortcutCancel()
+    {
+        if (_isAnalyzingRepo) _repoCts?.Cancel();
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnShortcutToggleTheme()
+    {
+        // light → dark → system → light …
+        var next = _theme switch
+        {
+            "light" => "dark",
+            "dark" => "system",
+            _ => "light",
+        };
+        await OnThemeChanged(next);
+        StateHasChanged();
+    }
+
     public void Dispose()
     {
         _debounceCts?.Cancel();
@@ -599,6 +795,7 @@
         {
             // Best-effort dispose — fire-and-forget since Dispose is sync
             _ = JS.InvokeVoidAsync("ccaMonaco.dispose", _editorId);
+            _ = JS.InvokeVoidAsync("ccaShortcuts.detach");
         }
     }
 
@@ -637,17 +834,18 @@
         }
         catch (OperationCanceledException)
         {
+            _repoState = new RepoAnalysisState.Cancelled();
             return null;
         }
         catch (Exception ex)
         {
-            _repoStatus = $"Network error: {ex.Message}";
+            _repoState = new RepoAnalysisState.Failed($"Network error: {ex.Message}");
             return null;
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            _repoStatus = FormatHttpError(response);
+            _repoState = new RepoAnalysisState.Failed(FormatHttpError(response));
             return null;
         }
 
@@ -658,7 +856,7 @@
         }
         catch (JsonException ex)
         {
-            _repoStatus = $"Failed to parse GitHub response: {ex.Message}";
+            _repoState = new RepoAnalysisState.Failed($"Failed to parse GitHub response: {ex.Message}");
             return null;
         }
     }

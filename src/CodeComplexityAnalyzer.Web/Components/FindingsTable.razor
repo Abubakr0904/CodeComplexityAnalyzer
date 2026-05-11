@@ -34,6 +34,8 @@ else
         }
     </div>
 
+    <MetricDistributionChart Findings="Findings" />
+
     @if (Findings!.Count == 0)
     {
         <p class="empty-state">No findings — code is within thresholds.</p>
