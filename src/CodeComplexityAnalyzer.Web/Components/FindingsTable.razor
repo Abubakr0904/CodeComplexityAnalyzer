@@ -80,7 +80,7 @@ else
                     <Icon Name="download" Size="13" />
                     CSV
                 </button>
-                @if (OnExport.HasDelegate)
+                @if (OnExport.HasDelegate && CanExport)
                 {
                     <button type="button" class="btn btn-sm"
                             @onclick='() => OnExport.InvokeAsync("json")'
@@ -178,6 +178,14 @@ else
 
     [Parameter]
     public EventCallback<string> OnExport { get; set; }
+
+    /// <summary>
+    /// Whether the host has a backing AnalysisReport available for JSON/SARIF
+    /// export. When false, the JSON/SARIF buttons are hidden so users don't
+    /// click no-ops; CSV remains available because it's built inline.
+    /// </summary>
+    [Parameter]
+    public bool CanExport { get; set; }
 
     private HashSet<string> _expanded = new();
     private SeverityFilter _severityFilter = SeverityFilter.Both;

@@ -63,7 +63,10 @@
             </label>
         </div>
 
-        <FindingsTable Findings="_findings" OnFindingClick="HandleFindingClickPaste" OnExport="HandleExportPaste" />
+        <FindingsTable Findings="_findings"
+                       OnFindingClick="HandleFindingClickPaste"
+                       OnExport="HandleExportPaste"
+                       CanExport="@(_pasteReport is not null)" />
     </div>
 
     <div class="card" hidden="@(_activeMode != "github")">
@@ -109,7 +112,10 @@
             <p class="repo-status">@_repoStatus</p>
         }
 
-        <FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" OnExport="HandleExportRepo" />
+        <FindingsTable Findings="_repoFindings"
+                       OnFindingClick="HandleFindingClickRepo"
+                       OnExport="HandleExportRepo"
+                       CanExport="@(_repoReport is not null)" />
     </div>
 </div>
 
