@@ -1,0 +1,53 @@
+@using CodeComplexityAnalyzer.Core.Reporting
+
+@if (Findings is { Count: > 0 })
+{
+    var buckets = BuildBuckets(Findings);
+    var max = buckets.Max(b => b.Total);
+    if (max == 0) return;
+
+    <div class="metric-chart" role="img" aria-label="Findings by metric type">
+        <div class="metric-chart-title">Findings by metric</div>
+        <div class="metric-chart-rows">
+            @foreach (var b in buckets)
+            {
+                var errorPct = max == 0 ? 0 : (b.Errors * 100.0 / max);
+                var warningPct = max == 0 ? 0 : (b.Warnings * 100.0 / max);
+                <div class="metric-row" @key="b.Metric"
+                     title="@($"{b.Metric}: {b.Errors} error(s), {b.Warnings} warning(s)")">
+                    <span class="metric-row-label">@b.Metric</span>
+                    <div class="metric-row-track">
+                        @if (b.Errors > 0)
+                        {
+                            <div class="metric-row-bar bar-error"
+                                 style="@($"width: {errorPct.ToString(System.Globalization.CultureInfo.InvariantCulture)}%")"></div>
+                        }
+                        @if (b.Warnings > 0)
+                        {
+                            <div class="metric-row-bar bar-warning"
+                                 style="@($"width: {warningPct.ToString(System.Globalization.CultureInfo.InvariantCulture)}%")"></div>
+                        }
+                    </div>
+                    <span class="metric-row-count">@b.Total</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<Finding>? Findings { get; set; }
+
+    private sealed record Bucket(MetricType Metric, int Errors, int Warnings)
+    {
+        public int Total => Errors + Warnings;
+    }
+
+    private static List<Bucket> BuildBuckets(IReadOnlyList<Finding> findings) =>
+        Enum.GetValues<MetricType>()
+            .Select(m => new Bucket(
+                Metric: m,
+                Errors: findings.Count(f => f.MetricType == m && f.Severity == Severity.Error),
+                Warnings: findings.Count(f => f.MetricType == m && f.Severity == Severity.Warning)))
+            .ToList();
+}
