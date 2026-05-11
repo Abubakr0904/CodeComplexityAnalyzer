@@ -55,6 +55,11 @@
             <button type="button" class="btn btn-primary" @onclick="Analyze" disabled="@_isAnalyzing">
                 <Icon Name="play" Size="13" />
                 @(_isAnalyzing ? "Analyzing…" : "Analyze")
+                <kbd class="kbd-inline">@KbdAnalyze</kbd>
+            </button>
+            <button type="button" class="btn btn-ghost" @onclick="LoadSampleSnippet"
+                    title="Load a deliberately complex C# snippet to demo the analyzer">
+                Try a sample
             </button>
             <label class="auto-toggle">
                 <input type="checkbox" @bind="_autoAnalyze" />
@@ -78,6 +83,24 @@
                 <input type="text"
                        @bind="_repoUrl"
                        placeholder="https://github.com/owner/repo" />
+                @{
+                    var recent = BuildRecentRepoChips();
+                }
+                @if (recent.Count > 0)
+                {
+                    <div class="recent-repos">
+                        <span class="recent-repos-label">Recent:</span>
+                        @foreach (var chip in recent)
+                        {
+                            <button type="button" class="recent-chip" @key="chip.Source"
+                                    @onclick="() => UseRecentRepo(chip)"
+                                    title="@chip.Source">
+                                <Icon Name="github" Size="11" />
+                                <span>@chip.Display</span>
+                            </button>
+                        }
+                    </div>
+                }
             </label>
             <label class="input-field">
                 <span class="input-field-label">Branch (optional)</span>
@@ -107,10 +130,8 @@
         @{
             var repoStatusText = _repoState.ToStatusText();
         }
-        @if (!string.IsNullOrEmpty(repoStatusText))
-        {
-            <p class="repo-status">@repoStatusText</p>
-        }
+        <p class="repo-status" role="status" aria-live="polite"
+           hidden="@string.IsNullOrEmpty(repoStatusText)">@repoStatusText</p>
 
         <FindingsTable Findings="_repoFindings" OnFindingClick="HandleFindingClickRepo" />
     </div>
@@ -120,6 +141,8 @@
     // ── UI state ──────────────────────────────────────────────────────────────
     private string _activeMode = "paste";
     private string _theme = "system";
+    private string _modLabel = "Ctrl";
+    private string KbdAnalyze => $"{_modLabel}+↵";
 
     private async Task OnThemeChanged(string theme)
     {
@@ -158,6 +181,13 @@
             _selfRef = DotNetObjectReference.Create(this);
             var ok = await JS.InvokeAsync<bool>("ccaMonaco.create", _editorId, _sourceCode, _selfRef);
             _editorInitialized = ok;
+            try
+            {
+                await JS.InvokeVoidAsync("ccaShortcuts.attach", _selfRef);
+                _modLabel = await JS.InvokeAsync<string>("ccaShortcuts.modLabel") ?? "Ctrl";
+                StateHasChanged();
+            }
+            catch { /* shortcuts are optional */ }
         }
         else if (_editorInitialized && _sourceCode != _lastEditorValue)
         {
@@ -322,6 +352,96 @@
     }
 
     private sealed record FileDescriptor(string Name, string Content);
+
+    // ── Sample snippet ────────────────────────────────────────────────────────
+    private const string SampleSnippet = @"using System;
+using System.Collections.Generic;
+
+namespace Demo;
+
+public class OrderProcessor
+{
+    // Deliberately complex method to demo cca's flagging.
+    public string ProcessOrder(string id, int qty, decimal price, bool rush,
+                               string couponCode, string region, bool isMember,
+                               decimal balance)
+    {
+        var notes = new List<string>();
+        if (qty <= 0) return ""invalid qty"";
+        if (price < 0) return ""invalid price"";
+        if (string.IsNullOrEmpty(id)) return ""no id"";
+
+        decimal total = qty * price;
+
+        if (rush) total += 10;
+        else if (region == ""EU"") total += 5;
+        else if (region == ""APAC"") total += 7;
+        else if (region == ""NA"") total += 3;
+
+        if (couponCode == ""SAVE10"") total *= 0.9m;
+        else if (couponCode == ""SAVE20"") total *= 0.8m;
+        else if (couponCode == ""VIP"" && isMember) total *= 0.7m;
+
+        if (balance < total)
+        {
+            notes.Add(""low balance"");
+            if (isMember && balance > total * 0.5m) total *= 0.95m;
+            else if (isMember) total *= 0.85m;
+            else return ""insufficient funds"";
+        }
+
+        for (int i = 0; i < qty; i++)
+        {
+            if (i % 10 == 0) notes.Add($""checkpoint {i}"");
+            if (rush && i > 100) break;
+        }
+
+        return total + "" : "" + string.Join("","", notes);
+    }
+}
+";
+
+    private async Task LoadSampleSnippet()
+    {
+        _sourceCode = SampleSnippet;
+        StateHasChanged();
+        // OnAfterRenderAsync pushes the new value into Monaco via setValue.
+        await Task.CompletedTask;
+    }
+
+    // ── Recent repos (derived from history) ───────────────────────────────────
+    private sealed record RecentRepoChip(string Source, string Display, string Url, string Branch);
+
+    private List<RecentRepoChip> BuildRecentRepoChips()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var chips = new List<RecentRepoChip>();
+        foreach (var entry in _history)
+        {
+            if (entry.Mode != "github") continue;
+            if (!seen.Add(entry.SourceId)) continue;
+
+            var atIdx = entry.SourceId.IndexOf('@');
+            var ownerRepo = atIdx >= 0 ? entry.SourceId[..atIdx] : entry.SourceId;
+            var branch = atIdx >= 0 ? entry.SourceId[(atIdx + 1)..] : string.Empty;
+
+            chips.Add(new RecentRepoChip(
+                Source: entry.SourceId,
+                Display: ownerRepo,
+                Url: $"https://github.com/{ownerRepo}",
+                Branch: branch));
+
+            if (chips.Count >= 5) break;
+        }
+        return chips;
+    }
+
+    private void UseRecentRepo(RecentRepoChip chip)
+    {
+        _repoUrl = chip.Url;
+        _repoBranch = chip.Branch;
+    }
+
     private int _maxCc = 10;
     private int _maxLines = 60;
     private int _maxParams = 5;
@@ -539,6 +659,41 @@
         await JS.InvokeVoidAsync("open", url, "_blank");
     }
 
+    // ── Keyboard shortcuts ────────────────────────────────────────────────────
+    [JSInvokable]
+    public async Task OnShortcutAnalyze()
+    {
+        if (_activeMode == "paste")
+        {
+            if (!_isAnalyzing) await Analyze();
+        }
+        else
+        {
+            if (!_isAnalyzingRepo) await AnalyzeRepo();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnShortcutCancel()
+    {
+        if (_isAnalyzingRepo) _repoCts?.Cancel();
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnShortcutToggleTheme()
+    {
+        // light → dark → system → light …
+        var next = _theme switch
+        {
+            "light" => "dark",
+            "dark" => "system",
+            _ => "light",
+        };
+        await OnThemeChanged(next);
+        StateHasChanged();
+    }
+
     public void Dispose()
     {
         _debounceCts?.Cancel();
@@ -550,6 +705,7 @@
         {
             // Best-effort dispose — fire-and-forget since Dispose is sync
             _ = JS.InvokeVoidAsync("ccaMonaco.dispose", _editorId);
+            _ = JS.InvokeVoidAsync("ccaShortcuts.detach");
         }
     }
 
