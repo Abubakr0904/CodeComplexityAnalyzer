@@ -753,3 +753,63 @@ main {
     padding: var(--space-6);
     border-radius: var(--radius);
 }
+
+/* ── Keyboard shortcut hint ──────────────────────────────────────────────── */
+.kbd-inline {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.45rem;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+    background-color: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+}
+
+.btn-ghost .kbd-inline,
+.btn:not(.btn-primary) .kbd-inline {
+    color: var(--text-faint);
+    background-color: var(--bg-hover);
+    border-color: var(--border);
+}
+
+/* ── Recent repos chips ──────────────────────────────────────────────────── */
+.recent-repos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    margin-top: 0.45rem;
+}
+
+.recent-repos-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+}
+
+.recent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background-color var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.recent-chip:hover {
+    background-color: var(--bg-hover);
+    color: var(--text);
+    border-color: var(--border-strong);
+}
